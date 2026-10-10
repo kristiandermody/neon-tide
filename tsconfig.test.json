@@ -1,0 +1,8 @@
+{
+  // Engine and tests with Node types only: proves the engine has no Cloudflare dependency.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/engine", "test"]
+}
