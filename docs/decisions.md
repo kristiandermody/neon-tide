@@ -26,3 +26,9 @@ Append new entries; do not rewrite old ones. The build agent logs every decision
 2026-10-10 | Deploy jobs disable setup-node dependency caching (`package-manager-cache: false`); PR job keeps npm cache | Cache everywhere | setup-node docs recommend no cache in secret-holding jobs to reduce cache-poisoning risk | yes
 2026-10-10 | Deploy jobs run typecheck and tests before staging deploy | Rely on PR checks only | Guards direct pushes and dispatch reruns | yes
 2026-10-10 | Workflow `permissions: contents: read` | Default token permissions | Least privilege | yes
+2026-10-10 | Engine state is plain JSON (`GameState`), mutated by pure functions that take `RulesConfig`; cells are row-major indices 0-99 | Class with methods | Stores directly in the Durable Object and round-trips through JSON | yes
+2026-10-10 | Fleet placement is submitted whole (`place`), replaceable until `ready` | Per-ship place messages | Client keeps the in-progress layout; server validates one complete fleet | yes
+2026-10-10 | A sunk result reveals that ship's cells to the shooter | Reveal only the final cell | The design system flips the whole ship to the sunk state; all its cells were already hit, so no hidden information leaks | yes
+2026-10-10 | Hard AI uses the shooter's knowledge of ship names on hits: a placement must cover all known hits of its own ship and none of another's; while any afloat ship is damaged, only damaged ships are counted | Pure density over all ships | Same information a human sees; keeps the spec's legal-placement counting but finishes wounded ships. Measured average 44 shots to win over 300 seeded games | yes
+2026-10-10 | `shipsMayTouch` lives in `RulesConfig` (true for Phase 1) | Hard-code | Keeps alternative rule sets additive | yes
+2026-10-10 | Separate `tsconfig.test.json` typechecks engine and tests with Node types only | One config | Proves the engine has no Cloudflare dependency | yes
