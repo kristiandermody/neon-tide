@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { fireOnce, placeRandomAndReady, playToEnd, shotCells } from "./helpers.ts";
 
 test("a full game against the computer at phone width", async ({ page }) => {

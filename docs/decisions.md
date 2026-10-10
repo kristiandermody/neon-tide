@@ -64,3 +64,4 @@ Append new entries; do not rewrite old ones. The build agent logs every decision
 2026-10-10 | Under reduced motion the result hold shortens to `--dur-turn` | Always hold `--dur-hold` | Nothing is animating to wait out; also makes full-game E2E fast | yes
 2026-10-10 | `scripts/smoke.sh` curls index, assets, manifest type, SPA fallback, API guards and a `--http1.1` WebSocket upgrade (101); runs on staging and production after each deploy | Playwright only | Cheap, fast, no browser | yes
 2026-10-10 | Separate `tsconfig.e2e.json` (Node + DOM libs) for Playwright specs | One test config | Page callbacks need DOM types; engine config must stay Node-only | yes
+2026-10-10 | E2E contexts start muted (`nt:muted=1` via init script) and Chromium runs with `--mute-audio` | Leave sound on in tests | Headless browsers play Web Audio; test clicks unlock it, so build-session test runs were audible on the owner's machine (diagnosed in PR #11) | yes

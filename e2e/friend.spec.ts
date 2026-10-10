@@ -1,9 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { placeRandomAndReady, playToEnd } from "./helpers.ts";
 
-test("two players finish a game over a shared link; the link then stays finished", async ({ browser, contextOptions }) => {
-  const host = await (await browser.newContext(contextOptions)).newPage();
-  const guest = await (await browser.newContext(contextOptions)).newPage();
+test("two players finish a game over a shared link; the link then stays finished", async ({ newPlayer }) => {
+  const host = await newPlayer();
+  const guest = await newPlayer();
 
   await host.goto("/");
   await host.getByRole("button", { name: "Play a friend" }).click();
@@ -25,15 +25,15 @@ test("two players finish a game over a shared link; the link then stays finished
   expect([hostResult, guestResult].sort()).toEqual(["You lose", "You win"]);
 
   // A third device cannot take part, and the players' links still show the result.
-  const stranger = await (await browser.newContext(contextOptions)).newPage();
+  const stranger = await newPlayer();
   await stranger.goto(link);
   await expect(stranger.getByRole("heading", { name: "Game over" })).toBeVisible();
   await host.reload();
   await expect(host.locator("dialog[open] h2")).toHaveText(hostResult);
 });
 
-test("a game with two players refuses a third", async ({ browser, contextOptions }) => {
-  const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext(contextOptions)).newPage()));
+test("a game with two players refuses a third", async ({ newPlayer }) => {
+  const [a, b, c] = await Promise.all([newPlayer(), newPlayer(), newPlayer()]);
   await a.goto("/");
   await a.getByRole("button", { name: "Play a friend" }).click();
   const link = await a.getByLabel("Invite link", { exact: true }).inputValue();
