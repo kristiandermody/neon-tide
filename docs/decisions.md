@@ -19,3 +19,10 @@ Append new entries; do not rewrite old ones. The build agent logs every decision
 2026-10-10 | Build handoff file replaced with the owner's newer pasted version (adds backup step and sync checklist; tokens.css not hand-edited) | Keep older on-disk draft | Pasted version is the owner's latest instruction | yes
 2026-10-10 | Add `.claude/` to repo `.gitignore` | Rely on global ignore only | Global ignore covers only settings.local.json on this machine | yes
 2026-10-10 | Docs and design-system PRs merged before any PR checks exist | Land CI PR first | Handoff fixes the order; no checks to wait on until the CI PR lands | yes
+2026-10-10 | PR workflow `ci.yml`: npm ci, typecheck, unit tests on pull requests to `main` | Run checks inside deploy.yml | Separate trigger and no secrets in PR runs | yes
+2026-10-10 | Unit tests use Node's built-in `node --test` on `.ts` files (native type stripping, Node >= 22.18) | Vitest, Jest | No extra dependencies; engine runs in plain Node as the spec requires | yes
+2026-10-10 | Production is a `needs: staging` job in the same deploy workflow; `workflow_dispatch` reruns the whole chain, no production-only dispatch | Separate workflow via `workflow_run` | Simplest way to guarantee production only follows a green staging deploy | yes
+2026-10-10 | Bump to `actions/checkout@v7` and `actions/setup-node@v7` (node24 runtime); CI uses Node 24 LTS | Stay on v4 | Node 20 action runtime deprecated; v7 are the current releases | yes
+2026-10-10 | Deploy jobs disable setup-node dependency caching (`package-manager-cache: false`); PR job keeps npm cache | Cache everywhere | setup-node docs recommend no cache in secret-holding jobs to reduce cache-poisoning risk | yes
+2026-10-10 | Deploy jobs run typecheck and tests before staging deploy | Rely on PR checks only | Guards direct pushes and dispatch reruns | yes
+2026-10-10 | Workflow `permissions: contents: read` | Default token permissions | Least privilege | yes
