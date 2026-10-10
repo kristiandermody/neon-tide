@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 
 test("home shows the wordmark, both modes, and install/preview metadata", async ({ page, request }) => {
   await page.goto("/");
@@ -23,9 +23,10 @@ test("an unknown game link says so and offers a new game", async ({ page }) => {
 test("the mute toggle flips and persists", async ({ page }) => {
   await page.goto("/");
   const mute = page.getByRole("button", { name: "Mute sound" });
-  await expect(mute).toHaveAttribute("aria-pressed", "false");
+  await expect(mute).toHaveAttribute("aria-pressed", "true"); // tests start muted (fixtures.ts)
   await mute.click();
-  await expect(mute).toHaveAttribute("aria-pressed", "true");
+  await expect(mute).toHaveAttribute("aria-pressed", "false");
   await page.reload();
-  await expect(page.getByRole("button", { name: "Mute sound" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Mute sound" })).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("button", { name: "Mute sound" }).click();
 });

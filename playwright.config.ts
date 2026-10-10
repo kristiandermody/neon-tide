@@ -19,6 +19,7 @@ export default defineConfig({
   },
   projects: [
     { name: "iphone", use: { ...devices["iPhone 13"] } },
-    { name: "android", use: { ...devices["Pixel 7"] } },
+    // --mute-audio: belt and braces with the app-level mute set in e2e/fixtures.ts.
+    { name: "android", use: { ...devices["Pixel 7"], launchOptions: { args: ["--mute-audio"] } } },
   ],
 });
