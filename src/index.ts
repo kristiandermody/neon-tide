@@ -70,8 +70,12 @@ export class GameRoom extends DurableObject<Env> {
       const claim = claimSeat(room, msg);
       if ("type" in claim) return send(ws, claim);
       ws.serializeAttachment({ seat: claim.seat } satisfies Attachment);
-      if (claim.joined) this.save(room);
-      send(ws, stateFor(room, claim.seat, this.connected(other(claim.seat))));
+      if (claim.joined) {
+        room.updatedAt = Date.now();
+        this.save(room);
+      }
+      this.sendTo(other(claim.seat), { type: "opponent_status", status: claim.joined ? "joined" : "connected" });
+      this.broadcastState(room);
       return;
     }
     if (seat === null) {
@@ -141,7 +145,7 @@ async function createGame(request: Request, env: Env): Promise<Response> {
     return json({ error: "bad_request" }, 400);
   }
   const mode = body.mode;
-  if (mode !== "computer" || typeof body.token !== "string" || !TOKEN_PATTERN.test(body.token)) {
+  if ((mode !== "computer" && mode !== "friend") || typeof body.token !== "string" || !TOKEN_PATTERN.test(body.token)) {
     return json({ error: "bad_request" }, 400);
   }
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
