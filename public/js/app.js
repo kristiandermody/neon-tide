@@ -6,6 +6,7 @@ import { isMuted, onMuteChange, play, setMuted, unlockAudio } from "./feedback.j
 import { FLEET, SIZE, cellLabel, fits, occupancy, randomLayout, shipCells, shipLength, shipName } from "./fleet.js";
 import { Connection } from "./net.js";
 import { playerToken } from "./store.js";
+import { keepAwake } from "./wakelock.js";
 
 const app = document.getElementById("app");
 const toastRegion = document.getElementById("toasts");
@@ -198,14 +199,27 @@ class GameScreen {
       onMessage: (msg) => this.receive(msg),
       onStatus: (status) => this.connectionStatus(status),
     });
-    this.onVisible = () => document.visibilityState === "visible" && this.conn.wake();
-    document.addEventListener("visibilitychange", this.onVisible);
+    // Lock screen, app switch, back-forward cache and network changes all come back through here.
+    this.onReturn = () => document.visibilityState === "visible" && this.conn.wake();
+    document.addEventListener("visibilitychange", this.onReturn);
+    addEventListener("pageshow", this.onReturn);
+    addEventListener("online", this.onReturn);
+    keepAwake(true);
   }
 
   destroy() {
     this.conn.stop();
-    document.removeEventListener("visibilitychange", this.onVisible);
+    keepAwake(false);
+    document.removeEventListener("visibilitychange", this.onReturn);
+    removeEventListener("pageshow", this.onReturn);
+    removeEventListener("online", this.onReturn);
     this.dialog?.close();
+  }
+
+  /** The game is decided: nothing more will arrive, so free the socket and the screen. */
+  finish() {
+    this.conn.stop();
+    keepAwake(false);
   }
 
   get opponentName() {
@@ -227,6 +241,7 @@ class GameScreen {
     this.firing = false;
     const fatal = { not_found: "No game here", game_full: "Game is full", game_over: "Game over", expired: "Game expired", not_a_player: "Not your game" };
     if (fatal[msg.code]) {
+      this.finish();
       this.kind = "message";
       this.el.replaceChildren(messageScreen(fatal[msg.code], msg.message).el);
       return;
@@ -258,6 +273,11 @@ class GameScreen {
     if (status === "joined") {
       play("tap");
       toast("Friend joined", "They are placing their fleet.");
+    } else if (status === "disconnected") {
+      toast(`${this.opponentName} left`, "The game is saved. It continues when they open the link again.");
+    } else if (status === "connected") {
+      play("tap");
+      toast(`${this.opponentName} is back`, "");
     }
   }
 
@@ -308,6 +328,7 @@ class GameScreen {
   render() {
     const vm = this.vm;
     if (!vm) return;
+    if (vm.phase === "over" || vm.phase === "expired") this.finish();
     if (vm.phase === "expired") {
       this.kind = "message";
       this.el.replaceChildren(messageScreen("Game expired", "This game sat idle for 24 hours and has ended.").el);

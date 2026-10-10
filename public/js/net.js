@@ -1,6 +1,8 @@
 // One WebSocket per game. Reconnects with backoff and resumes the seat with the same token.
 const PING = '{"type":"ping"}';
 const PING_EVERY_MS = 25000;
+/** After a lock screen or app switch, a socket can report OPEN while dead (common on iOS). */
+const PROBE_TIMEOUT_MS = 3000;
 
 export class Connection {
   /**
@@ -18,6 +20,8 @@ export class Connection {
     this.stopped = false;
     this.pingTimer = null;
     this.retryTimer = null;
+    this.probeTimer = null;
+    this.lastMessageAt = 0;
     this.connect();
   }
 
@@ -37,6 +41,7 @@ export class Connection {
       this.pingTimer = setInterval(() => this.ws === ws && ws.readyState === WebSocket.OPEN && ws.send(PING), PING_EVERY_MS);
     });
     ws.addEventListener("message", (event) => {
+      this.lastMessageAt = Date.now();
       let msg;
       try {
         msg = JSON.parse(event.data);
@@ -60,10 +65,28 @@ export class Connection {
   /** Reconnect now (e.g. the page became visible again) unless a healthy socket is open. */
   wake() {
     if (this.stopped) return;
-    if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
+    const ws = this.ws;
+    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
       this.attempt = 0;
       this.connect();
+      return;
     }
+    if (ws.readyState !== WebSocket.OPEN) return;
+    // Probe: any frame back within the timeout proves the socket is alive; otherwise replace it.
+    const sentAt = Date.now();
+    ws.send(PING);
+    clearTimeout(this.probeTimer);
+    this.probeTimer = setTimeout(() => {
+      if (this.ws !== ws || this.stopped || this.lastMessageAt >= sentAt) return;
+      this.ws = null;
+      try {
+        ws.close(4000, "stale");
+      } catch {
+        // already gone
+      }
+      this.attempt = 0;
+      this.connect();
+    }, PROBE_TIMEOUT_MS);
   }
 
   send(msg) {
@@ -77,6 +100,7 @@ export class Connection {
   stop() {
     this.stopped = true;
     clearInterval(this.pingTimer);
+    clearTimeout(this.probeTimer);
     clearTimeout(this.retryTimer);
     if (this.ws && this.ws.readyState <= WebSocket.OPEN) this.ws.close(1000, "done");
   }

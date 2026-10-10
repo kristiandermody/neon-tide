@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { cryptoRng, other, type Seat } from "./engine/index.ts";
 import { GAME_ID_PATTERN, newGameId } from "./room/ids.ts";
 import { PING, PONG, TOKEN_PATTERN, parseClientMessage, type Mode, type ServerMessage } from "./room/protocol.ts";
-import { claimSeat, createRoom, handle, stateFor, type RoomRecord } from "./room/room.ts";
+import { claimSeat, createRoom, handle, markBack, markGone, nextAlarm, stateFor, tick, upgrade, type RoomRecord } from "./room/room.ts";
 
 export interface Env {
   GAME_ROOM: DurableObjectNamespace<GameRoom>;
@@ -19,7 +19,10 @@ interface Attachment {
   seat: Seat | null;
 }
 
-/** One instance per game. WebSocket hibernation keeps idle games from being billed for duration. */
+/**
+ * One instance per game. WebSocket hibernation keeps idle games from being billed for duration;
+ * a single alarm drives the 2-minute disconnect grace and the 24h expiry.
+ */
 export class GameRoom extends DurableObject<Env> {
   private room: RoomRecord | undefined;
 
@@ -30,19 +33,26 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private load(): RoomRecord | undefined {
-    this.room ??= this.ctx.storage.kv.get<RoomRecord>(ROOM_KEY);
+    if (!this.room) {
+      const stored = this.ctx.storage.kv.get<RoomRecord>(ROOM_KEY);
+      if (stored) this.room = upgrade(stored);
+    }
     return this.room;
   }
 
-  private save(room: RoomRecord): void {
+  /** Persists the record and moves the alarm to the next pending deadline. */
+  private async save(room: RoomRecord): Promise<void> {
     this.room = room;
     this.ctx.storage.kv.put(ROOM_KEY, room);
+    const at = nextAlarm(room);
+    if (at === null) await this.ctx.storage.deleteAlarm();
+    else if ((await this.ctx.storage.getAlarm()) !== at) await this.ctx.storage.setAlarm(at);
   }
 
   /** Called once by the Worker right after it picks a fresh id. */
   async init(id: string, mode: Mode, token: string): Promise<boolean> {
     if (this.load()) return false;
-    this.save(createRoom(id, mode, token, Date.now(), cryptoRng));
+    await this.save(createRoom(id, mode, token, Date.now(), cryptoRng));
     return true;
   }
 
@@ -70,11 +80,10 @@ export class GameRoom extends DurableObject<Env> {
       const claim = claimSeat(room, msg);
       if ("type" in claim) return send(ws, claim);
       ws.serializeAttachment({ seat: claim.seat } satisfies Attachment);
-      if (claim.joined) {
-        room.updatedAt = Date.now();
-        this.save(room);
-      }
-      this.sendTo(other(claim.seat), { type: "opponent_status", status: claim.joined ? "joined" : "connected" });
+      const wasAway = room.expired ? false : markBack(room, claim.seat, Date.now());
+      await this.save(room);
+      if (claim.joined) this.sendTo(other(claim.seat), { type: "opponent_status", status: "joined" });
+      else if (wasAway) this.sendTo(other(claim.seat), { type: "opponent_status", status: "connected" });
       this.broadcastState(room);
       return;
     }
@@ -83,21 +92,43 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     const result = handle(room, seat, msg, Date.now(), cryptoRng);
-    if (result.changed) this.save(room);
+    if (result.changed) await this.save(room);
     for (const { to, msg: out } of result.out) this.sendTo(to, out);
     if (result.changed) this.broadcastState(room);
   }
 
-  async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
-    ws.close(code, reason);
+  // With compatibility_date >= 2026-04-07 the runtime answers Close frames itself
+  // (web_socket_auto_reply_to_close); echoing close() would throw on codes like 1005/1006.
+  async webSocketClose(ws: WebSocket): Promise<void> {
+    await this.dropped(ws);
+  }
+
+  async webSocketError(ws: WebSocket): Promise<void> {
+    await this.dropped(ws);
+  }
+
+  /** Starts the grace period when a seat's last socket goes away. */
+  private async dropped(ws: WebSocket): Promise<void> {
+    const room = this.load();
+    const seat = (ws.deserializeAttachment() as Attachment | null)?.seat ?? null;
+    if (!room || seat === null) return;
+    if (this.sockets(seat).some((other) => other !== ws)) return;
+    markGone(room, seat, Date.now());
+    await this.save(room);
+  }
+
+  async alarm(): Promise<void> {
+    const room = this.load();
+    if (!room) return;
+    const { newlyAway, expired } = tick(room, Date.now());
+    await this.save(room);
+    for (const seat of newlyAway) this.sendTo(other(seat), { type: "opponent_status", status: "disconnected" });
+    if (newlyAway.length || expired) this.broadcastState(room);
+    if (expired) for (const ws of this.ctx.getWebSockets()) ws.close(4410, "expired");
   }
 
   private sockets(seat: Seat): WebSocket[] {
     return this.ctx.getWebSockets().filter((ws) => (ws.deserializeAttachment() as Attachment | null)?.seat === seat);
-  }
-
-  private connected(seat: Seat): boolean {
-    return this.sockets(seat).length > 0;
   }
 
   private sendTo(seat: Seat, msg: ServerMessage): void {
@@ -108,7 +139,7 @@ export class GameRoom extends DurableObject<Env> {
     for (const seat of [0, 1] as Seat[]) {
       const sockets = this.sockets(seat);
       if (sockets.length === 0) continue;
-      const state = stateFor(room, seat, this.connected(other(seat)));
+      const state = stateFor(room, seat);
       for (const ws of sockets) send(ws, state);
     }
   }
