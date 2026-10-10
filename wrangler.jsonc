@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "neon-tide",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+
+  // Durable Object bindings, migrations, assets and routes are configured per
+  // environment below. Always deploy with --env staging or --env production.
+  "env": {
+    "staging": {
+      "name": "neon-tide-staging",
+      "workers_dev": true,
+      "routes": [],
+      "assets": { "directory": "./public" },
+      "durable_objects": {
+        "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }]
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }]
+    },
+    "production": {
+      "name": "neon-tide",
+      "workers_dev": false,
+      "routes": [{ "pattern": "neon-tide.kristiandermody.com", "custom_domain": true }],
+      "assets": { "directory": "./public" },
+      "durable_objects": {
+        "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }]
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }]
+    }
+  }
+}
