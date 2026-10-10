@@ -1,0 +1,756 @@
+/* Neon Tide — component CSS. Load after tokens.css.
+   Naming: .nt-block, .nt-block__element, .nt-block--modifier; runtime state hooks are .is-* or ARIA attributes.
+   No build step, no dependencies. Every colour, space, radius, glow and duration is a token from tokens.css. */
+
+/* ---------- 0. Type roles ----------
+   tokens.css exposes each type style as --text-<style>. The fallbacks repeat the scale so this
+   file also works where only the family variables are present. */
+:root {
+  --nt-type-display: var(--text-arcade-display, 400 24px/32px var(--font-arcade));
+  --nt-type-title: var(--text-arcade-title, 400 16px/24px var(--font-arcade));
+  --nt-type-label: var(--text-arcade-label, 400 12px/16px var(--font-arcade));
+  --nt-type-micro: var(--text-arcade-micro, 400 8px/12px var(--font-arcade));
+  --nt-type-body: var(--text-sans-body, 400 16px/24px var(--font-sans));
+  --nt-type-small: var(--text-sans-small, 400 14px/20px var(--font-sans));
+  --nt-type-button: var(--text-sans-button, 700 16px/20px var(--font-sans));
+  --nt-type-caption: var(--text-sans-caption, 600 12px/16px var(--font-sans));
+  --nt-type-coord: var(--text-sans-coord, 700 10px/12px var(--font-sans));
+}
+
+/* ---------- 1. Base ---------- */
+.nt-root {
+  margin: 0;
+  background: var(--bg-0);
+  color: var(--text-primary);
+  font: var(--nt-type-body);
+  -webkit-text-size-adjust: 100%;
+}
+.nt-root *,
+.nt-root *::before,
+.nt-root *::after { box-sizing: border-box; }
+
+.nt-arcade {
+  font: var(--nt-type-title);
+  text-transform: uppercase;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+.nt-arcade--display { font: var(--nt-type-display); }
+.nt-arcade--label { font: var(--nt-type-label); }
+.nt-arcade--micro { font: var(--nt-type-micro); }
+
+.nt-text-secondary { color: var(--text-secondary); }
+.nt-small { font: var(--nt-type-small); }
+.nt-caption { font: var(--nt-type-caption); letter-spacing: 0.02em; }
+
+.nt-visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+.nt-icon { width: 24px; height: 24px; flex: none; fill: currentColor; shape-rendering: crispEdges; }
+.nt-icon--sm { width: 16px; height: 16px; }
+.nt-icon--lg { width: 32px; height: 32px; }
+
+/* ---------- 2. Cube bevel ----------
+   One box, three faces. The top face fills the box; the bottom --_depth strip is split at the centre
+   into the left face and the right face, and the top face dips --_notch into it to make the corner.
+   Hard-stop gradients only: nothing is blurred, nothing is 3D. */
+:where(.nt-cube, .nt-cell, .nt-btn, .nt-iconbtn, .nt-seg__option, .nt-pip, .nt-waiting__cube) {
+  --_top: var(--neutral-top);
+  --_left: var(--neutral-left);
+  --_right: var(--neutral-right);
+  --_depth: var(--cube-depth);
+  --_notch: var(--cube-notch);
+}
+.nt-cube,
+.nt-cell,
+.nt-btn,
+.nt-iconbtn,
+.nt-pip,
+.nt-seg__option[aria-checked="true"],
+.nt-waiting__cube,
+.nt-waiting__cube::before,
+.nt-cell.is-flipping::before {
+  background:
+    linear-gradient(to top right, transparent 50%, var(--_top) 50%) left 0 bottom calc(var(--_depth) - var(--_notch)) / calc(50% + 0.5px) var(--_notch) no-repeat,
+    linear-gradient(to top left, transparent 50%, var(--_top) 50%) right 0 bottom calc(var(--_depth) - var(--_notch)) / calc(50% + 0.5px) var(--_notch) no-repeat,
+    linear-gradient(90deg, var(--_left) 50%, var(--_right) 50%) left bottom / 100% var(--_depth) no-repeat,
+    var(--_top);
+}
+
+/* Face sets. Use on .nt-cube, or let a block modifier set them. */
+.nt-cube--unknown { --_top: var(--state-unknown-top); --_left: var(--state-unknown-left); --_right: var(--state-unknown-right); }
+.nt-cube--miss { --_top: var(--state-miss-top); --_left: var(--state-miss-left); --_right: var(--state-miss-right); }
+.nt-cube--hit { --_top: var(--state-hit-top); --_left: var(--state-hit-left); --_right: var(--state-hit-right); }
+.nt-cube--sunk { --_top: var(--state-sunk-top); --_left: var(--state-sunk-left); --_right: var(--state-sunk-right); }
+.nt-cube--ship { --_top: var(--state-ship-top); --_left: var(--state-ship-left); --_right: var(--state-ship-right); }
+
+/* ---------- 3. Cell ---------- */
+.nt-cell {
+  --_top: var(--state-unknown-top);
+  --_left: var(--state-unknown-left);
+  --_right: var(--state-unknown-right);
+  --_ink: var(--on-bright);
+  --_x: var(--_ink);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-width: var(--cell-min);
+  aspect-ratio: 1;
+  margin: 0;
+  padding: 0 0 var(--_depth);
+  border: 0;
+  border-radius: var(--radius-none);
+  color: var(--_top); /* glows use currentColor, so a glow always matches the lit face */
+  font: inherit;
+  appearance: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.nt-cell::after { content: ""; display: block; }
+
+.nt-cell--miss { --_top: var(--state-miss-top); --_left: var(--state-miss-left); --_right: var(--state-miss-right); }
+.nt-cell--hit { --_top: var(--state-hit-top); --_left: var(--state-hit-left); --_right: var(--state-hit-right); }
+.nt-cell--sunk { --_top: var(--state-sunk-top); --_left: var(--state-sunk-left); --_right: var(--state-sunk-right); --_x: var(--_top); }
+.nt-cell--ship { --_top: var(--state-ship-top); --_left: var(--state-ship-left); --_right: var(--state-ship-right); }
+
+/* Shape cues: miss = dot, hit = X, sunk = solid block with the X cut out, your ship = ring. */
+.nt-cell--miss::after { width: 26%; aspect-ratio: 1; background: var(--_ink); }
+.nt-cell--hit::after,
+.nt-cell--sunk::after {
+  width: 50%;
+  aspect-ratio: 1;
+  background:
+    linear-gradient(45deg, transparent 41%, var(--_x) 41% 59%, transparent 59%),
+    linear-gradient(-45deg, transparent 41%, var(--_x) 41% 59%, transparent 59%);
+}
+.nt-cell--sunk::after { width: 62%; background-color: var(--_ink); }
+.nt-cell--ship::after { width: 42%; aspect-ratio: 1; border: 2px solid var(--_ink); }
+
+/* Shot cells and other non-targets stay focusable so the grid reads in order, but do not invite a tap. */
+.nt-cell[aria-disabled="true"] { cursor: default; }
+
+/* Targeting cursor: four corner brackets outside the cell, plus a glow. */
+.nt-cell[aria-selected="true"],
+.nt-cell.is-targeted { z-index: 2; box-shadow: 0 0 var(--glow-2) var(--cursor); }
+.nt-cell[aria-selected="true"]::before,
+.nt-cell.is-targeted::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--cursor), var(--cursor)) left top / 34% 2px,
+    linear-gradient(var(--cursor), var(--cursor)) left top / 2px 34%,
+    linear-gradient(var(--cursor), var(--cursor)) right top / 34% 2px,
+    linear-gradient(var(--cursor), var(--cursor)) right top / 2px 34%,
+    linear-gradient(var(--cursor), var(--cursor)) left bottom / 34% 2px,
+    linear-gradient(var(--cursor), var(--cursor)) left bottom / 2px 34%,
+    linear-gradient(var(--cursor), var(--cursor)) right bottom / 34% 2px,
+    linear-gradient(var(--cursor), var(--cursor)) right bottom / 2px 34%;
+  background-repeat: no-repeat;
+}
+
+/* Most recent shot: inset ring plus the low glow in the face colour. */
+.nt-cell.is-last { z-index: 1; box-shadow: inset 0 0 0 2px var(--text-primary), 0 0 var(--glow-1) currentColor; }
+
+/* Placement preview: valid = solid outline and ring, invalid = dashed outline and hatch. */
+.nt-cell--valid::before,
+.nt-cell--invalid::before { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.nt-cell--valid::before { border: 2px solid var(--place-valid); }
+.nt-cell--valid::after { width: 42%; aspect-ratio: 1; border: 2px solid var(--place-valid); }
+.nt-cell--invalid::before {
+  border: 2px dashed var(--place-invalid);
+  background: repeating-linear-gradient(45deg, var(--place-invalid) 0 2px, transparent 2px 7px);
+}
+
+/* Static result cues. These also serve as the reduced-motion fallback. */
+.nt-cell--hit.is-flipping { z-index: 2; box-shadow: 0 0 var(--glow-3) currentColor; }
+.nt-cell.is-sinking { z-index: 2; box-shadow: 0 0 var(--glow-3) currentColor; }
+
+/* ---------- 4. Board ---------- */
+.nt-board {
+  display: grid;
+  gap: var(--board-gap);
+  width: 100%;
+  max-width: 560px;
+  margin: 0;
+  padding: 0;
+  background: var(--bg-1);
+}
+.nt-board__row {
+  display: grid;
+  grid-template-columns: var(--board-label) repeat(10, minmax(var(--cell-min), 1fr));
+  gap: var(--board-gap);
+  align-items: center;
+}
+.nt-board__label {
+  display: grid;
+  place-items: center;
+  min-height: var(--board-label);
+  background: var(--bg-0);
+  color: var(--text-secondary);
+  font: var(--nt-type-coord);
+  font-variant-numeric: tabular-nums;
+}
+.nt-board__row > .nt-board__label:first-child { align-self: stretch; }
+
+/* The board that takes input this turn. */
+.nt-board--active { outline: 2px solid var(--turn-you); outline-offset: 2px; }
+
+/* Read-only miniature: no labels, no tap targets. Give it role="img" and a summary label. */
+.nt-board--mini { --cell-min: 0px; --cube-depth: 2px; --cube-notch: 1px; --board-label: 0px; width: 110px; flex: none; }
+.nt-board--mini .nt-board__row { grid-template-columns: repeat(10, 1fr); }
+.nt-board--mini .nt-cell { cursor: default; }
+.nt-board--mini .nt-cell--ship::after { border-width: 1px; }
+
+/* ---------- 5. Ship piece ---------- */
+.nt-ship {
+  --ship-cell: var(--cell-min);
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--ship-cell);
+  gap: var(--board-gap);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.nt-ship--v { grid-auto-flow: row; grid-auto-rows: var(--ship-cell); grid-template-columns: var(--ship-cell); }
+.nt-ship .nt-cell { cursor: inherit; }
+.nt-ship.is-dragging {
+  z-index: 5;
+  cursor: grabbing;
+  transform: translateY(calc(var(--space-2) * -1)) scale(1.08);
+  box-shadow: 0 0 var(--glow-2) var(--state-ship-top);
+}
+.nt-ship.is-selected { outline: 2px solid var(--cursor); outline-offset: 3px; }
+/* A lone ship in the tray is one cell tall; pad its hit area out to target-min. */
+.nt-ship:not(.nt-ship--static)::before { content: ""; position: absolute; inset: calc((var(--target-min) - var(--ship-cell)) / -2); }
+.nt-ship--static { cursor: default; touch-action: auto; }
+
+/* Where a lifted ship came from. */
+.nt-ship__slot {
+  display: inline-block;
+  border: 2px dashed var(--line-strong);
+  background: var(--bg-1);
+}
+
+.nt-tray {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-1);
+  border-radius: var(--radius-md);
+}
+
+/* ---------- 6. Buttons ---------- */
+.nt-btn,
+.nt-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: var(--target-min);
+  min-height: calc(var(--target-min) + var(--cube-depth));
+  margin: 0;
+  padding: 0 var(--space-4) var(--_depth);
+  border: 0 solid transparent;
+  border-radius: var(--radius-sm);
+  background-clip: padding-box;
+  color: var(--text-primary);
+  font: var(--nt-type-button);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  appearance: none;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.nt-iconbtn { width: var(--target-min); padding: 0 0 var(--_depth); }
+
+.nt-btn--primary { --_top: var(--action-top); --_left: var(--action-left); --_right: var(--action-right); color: var(--on-bright); }
+.nt-btn--block { display: flex; width: 100%; }
+.nt-btn--fire {
+  display: flex;
+  width: 100%;
+  min-height: calc(56px + var(--cube-depth));
+  gap: var(--space-3);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+.nt-btn__meta { font: var(--nt-type-title); letter-spacing: 0; -webkit-font-smoothing: none; }
+
+.nt-btn--ghost,
+.nt-iconbtn--ghost {
+  min-height: var(--target-min);
+  padding-bottom: 0;
+  background: none;
+  color: var(--text-secondary);
+}
+
+@media (hover: hover) {
+  .nt-btn:hover,
+  .nt-iconbtn:hover { filter: brightness(1.14); }
+  .nt-btn--ghost:hover,
+  .nt-iconbtn--ghost:hover { filter: none; color: var(--text-primary); background: var(--surface-1); }
+}
+.nt-btn.is-hover,
+.nt-iconbtn.is-hover { filter: brightness(1.14); }
+.nt-btn--ghost.is-hover,
+.nt-iconbtn--ghost.is-hover { filter: none; color: var(--text-primary); background: var(--surface-1); }
+
+/* Press: the top face drops onto the base. The box keeps its size, so nothing around it moves. */
+.nt-btn:active,
+.nt-btn.is-active,
+.nt-iconbtn:active,
+.nt-iconbtn.is-active,
+.nt-iconbtn[aria-pressed="true"] {
+  --_depth: var(--cube-depth-pressed);
+  --_notch: 1px;
+  border-top-width: calc(var(--cube-depth) - var(--cube-depth-pressed));
+  filter: none;
+}
+.nt-btn--ghost:active,
+.nt-btn--ghost.is-active,
+.nt-iconbtn--ghost:active,
+.nt-iconbtn--ghost.is-active {
+  border-top-width: 0;
+  padding-bottom: 0;
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.nt-btn:focus-visible,
+.nt-btn.is-focus,
+.nt-iconbtn:focus-visible,
+.nt-iconbtn.is-focus,
+.nt-seg__option:focus-visible,
+.nt-seg__option.is-focus,
+.nt-ship:focus-visible,
+.nt-share__input:focus-visible,
+.nt-share__input.is-focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.nt-cell:focus-visible,
+.nt-cell.is-focus {
+  z-index: 3;
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--bg-0);
+}
+
+.nt-btn:disabled,
+.nt-btn[aria-disabled="true"],
+.nt-iconbtn:disabled,
+.nt-iconbtn[aria-disabled="true"] {
+  --_top: var(--surface-2);
+  --_left: var(--surface-1);
+  --_right: var(--bg-1);
+  --_depth: var(--cube-depth-pressed);
+  --_notch: 1px;
+  border-top-width: calc(var(--cube-depth) - var(--cube-depth-pressed));
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  filter: none;
+}
+.nt-btn--ghost:disabled,
+.nt-btn--ghost[aria-disabled="true"],
+.nt-iconbtn--ghost:disabled {
+  border-top-width: 0;
+  padding-bottom: 0;
+  background: none;
+}
+
+/* Mute toggle: aria-pressed="true" means muted. */
+.nt-mute[aria-pressed="true"] .nt-mute__on,
+.nt-mute:not([aria-pressed="true"]) .nt-mute__off { display: none; }
+
+/* ---------- 7. Segmented control ---------- */
+.nt-seg {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+.nt-seg--block { display: grid; width: 100%; }
+.nt-seg__option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  margin: 0;
+  padding: 0 var(--space-3) var(--_depth);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: var(--nt-type-button);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  appearance: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.nt-seg__option[aria-checked="true"] {
+  --_top: var(--action-top);
+  --_left: var(--action-left);
+  --_right: var(--action-right);
+  color: var(--on-bright);
+}
+@media (hover: hover) {
+  .nt-seg__option:not([aria-checked="true"]):not(:disabled):hover { color: var(--text-primary); background: var(--surface-2); }
+}
+.nt-seg__option.is-hover { color: var(--text-primary); background: var(--surface-2); }
+.nt-seg__option:not([aria-checked="true"]):active,
+.nt-seg__option.is-active { color: var(--text-primary); background: var(--line); }
+.nt-seg__option:disabled,
+.nt-seg__option[aria-disabled="true"] { color: var(--text-disabled); cursor: not-allowed; background: none; }
+
+/* ---------- 8. Modal and sheet ---------- */
+.nt-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: var(--space-4);
+  border: 0;
+  background: none;
+  color: inherit;
+}
+.nt-modal::backdrop { background: var(--scrim); }
+.nt-modal__scrim { position: absolute; inset: 0; background: var(--scrim); }
+.nt-modal__panel {
+  position: relative;
+  display: grid;
+  gap: var(--space-4);
+  width: min(100%, 360px);
+  max-height: 100%;
+  overflow: auto;
+  padding: var(--space-6) var(--space-4) var(--space-4);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+.nt-modal__title { margin: 0; font: var(--nt-type-title); text-transform: uppercase; -webkit-font-smoothing: none; }
+.nt-modal__body { margin: 0; color: var(--text-secondary); }
+.nt-modal__body > :first-child { margin-top: 0; }
+.nt-modal__body > :last-child { margin-bottom: 0; }
+.nt-modal__actions { display: grid; gap: var(--space-2); }
+.nt-modal__close { position: absolute; top: var(--space-2); right: var(--space-2); }
+
+.nt-modal--sheet { place-items: end stretch; padding: 0; }
+.nt-modal--sheet .nt-modal__panel {
+  width: 100%;
+  max-width: 480px;
+  max-height: 88%;
+  margin-inline: auto;
+  padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  border-bottom: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+/* ---------- 9. Toast ---------- */
+.nt-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: fit-content;
+  max-width: min(100%, 360px);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font: var(--nt-type-small);
+}
+.nt-toast .nt-cell { --cell-min: 0px; --cube-depth: 4px; --cube-notch: 2px; width: 28px; flex: none; cursor: default; }
+.nt-toast .nt-icon { color: var(--text-secondary); }
+.nt-toast__title { display: block; font: var(--nt-type-label); text-transform: uppercase; -webkit-font-smoothing: none; }
+.nt-toast-region {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  pointer-events: none;
+}
+
+/* ---------- 10. Turn banner ---------- */
+.nt-banner {
+  --_turn: var(--turn-you);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 4px solid var(--_turn);
+  background: var(--surface-1);
+  color: var(--_turn);
+}
+.nt-banner--you { box-shadow: 0 var(--space-1) var(--glow-2) calc(var(--space-1) * -1) var(--turn-you); }
+.nt-banner--opp { --_turn: var(--turn-opp); border-bottom-style: dashed; }
+.nt-banner__text { display: grid; flex: 1; min-width: 0; }
+.nt-banner__title { margin: 0; font: var(--nt-type-title); text-transform: uppercase; -webkit-font-smoothing: none; }
+.nt-banner__hint { margin: 0; color: var(--text-secondary); font: var(--nt-type-caption); letter-spacing: 0.02em; }
+.nt-banner__aside { display: flex; align-items: center; gap: var(--space-2); color: var(--text-secondary); }
+
+/* ---------- 11. Fleet tracker ---------- */
+.nt-fleet { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.nt-fleet__head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); color: var(--text-secondary); font: var(--nt-type-caption); letter-spacing: 0.06em; text-transform: uppercase; }
+.nt-fleet__count { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.nt-fleet__list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.nt-fleet__ship { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 20px; }
+.nt-fleet__name { color: var(--text-primary); font: var(--nt-type-small); }
+.nt-fleet__pips { display: flex; gap: 2px; }
+.nt-pip {
+  --_top: var(--state-ship-top);
+  --_left: var(--state-ship-left);
+  --_right: var(--state-ship-right);
+  --_depth: 3px;
+  --_notch: 1px;
+  position: relative;
+  display: block;
+  width: 12px;
+  height: 14px;
+}
+.nt-pip--hit { --_top: var(--state-hit-top); --_left: var(--state-hit-left); --_right: var(--state-hit-right); }
+.nt-pip--hit::after {
+  content: "";
+  position: absolute;
+  inset: 2px 2px 5px;
+  background:
+    linear-gradient(45deg, transparent 36%, var(--on-bright) 36% 64%, transparent 64%),
+    linear-gradient(-45deg, transparent 36%, var(--on-bright) 36% 64%, transparent 64%);
+}
+/* Sunk ships go hollow: outline only, name struck through. */
+.nt-fleet__ship.is-sunk .nt-pip { background: none; border: 2px solid var(--state-sunk-top); height: 12px; margin-bottom: 2px; }
+.nt-fleet__ship.is-sunk .nt-pip::after { content: none; }
+.nt-fleet__ship.is-sunk .nt-fleet__name { color: var(--text-secondary); text-decoration: line-through; }
+
+.nt-fleet--compact .nt-fleet__list { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.nt-fleet--compact .nt-fleet__ship { min-height: 0; }
+.nt-fleet--compact .nt-fleet__name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- 12. Share link ---------- */
+.nt-share { display: grid; gap: var(--space-2); }
+.nt-share__label { color: var(--text-secondary); font: var(--nt-type-caption); letter-spacing: 0.06em; text-transform: uppercase; }
+.nt-share__row { display: flex; gap: var(--space-2); }
+.nt-share__input {
+  flex: 1 1 0;
+  width: 0; /* let the row, not the field's intrinsic width, set its size */
+  min-width: 0;
+  height: calc(var(--target-min) + var(--cube-depth));
+  margin: 0;
+  padding: 0 var(--space-3);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  color: var(--text-primary);
+  font: var(--nt-type-small);
+  text-overflow: ellipsis;
+  appearance: none;
+}
+@media (hover: hover) { .nt-share__input:hover { border-color: var(--text-secondary); } }
+.nt-share__input.is-hover { border-color: var(--text-secondary); }
+.nt-share__input:disabled { border-color: var(--line); color: var(--text-disabled); cursor: not-allowed; }
+.nt-share__status { min-height: 16px; color: var(--place-valid); font: var(--nt-type-caption); }
+
+/* ---------- 13. Waiting for opponent ---------- */
+.nt-waiting { display: grid; justify-items: center; gap: var(--space-4); text-align: center; }
+.nt-waiting__cubes { display: flex; gap: var(--space-2); }
+.nt-waiting__cube {
+  --_top: var(--state-unknown-top);
+  --_left: var(--state-unknown-left);
+  --_right: var(--state-unknown-right);
+  position: relative;
+  width: 24px;
+  height: 24px;
+}
+/* Without motion the three cubes sit lit: cyan, orange, magenta. */
+.nt-waiting__cube::before { content: ""; position: absolute; inset: 0; }
+.nt-waiting__cube:nth-child(1)::before { --_top: var(--state-miss-top); --_left: var(--state-miss-left); --_right: var(--state-miss-right); }
+.nt-waiting__cube:nth-child(2)::before { --_top: var(--state-hit-top); --_left: var(--state-hit-left); --_right: var(--state-hit-right); }
+.nt-waiting__cube:nth-child(3)::before { --_top: var(--state-sunk-top); --_left: var(--state-sunk-left); --_right: var(--state-sunk-right); }
+.nt-waiting__label { margin: 0; color: var(--turn-opp); font: var(--nt-type-label); text-transform: uppercase; -webkit-font-smoothing: none; }
+.nt-waiting__hint { margin: 0; max-width: 32ch; color: var(--text-secondary); font: var(--nt-type-small); }
+
+/* ---------- 14. Screen scaffolding ---------- */
+.nt-screen {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 480px;
+  min-height: 100dvh;
+  margin-inline: auto;
+  padding: 0 var(--space-2) max(var(--space-2), env(safe-area-inset-bottom));
+}
+.nt-screen__top { margin-inline: calc(var(--space-2) * -1); }
+.nt-screen__main { display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
+.nt-screen__main--center { align-content: center; justify-items: center; text-align: center; }
+/* The board bleeds into the page gutter so ten 32px cells and the label column fit a 360px phone. */
+.nt-screen__board { margin-inline: calc(var(--space-1) * -1); }
+/* On a short viewport the board gives up width before the screen scrolls; it never drops under ten 32px cells. */
+.nt-screen__board .nt-board {
+  min-width: min(100%, calc(var(--cell-min) * 10 + var(--board-gap) * 10 + var(--board-label)));
+  max-width: min(560px, calc(100dvh - var(--board-chrome, 292px)));
+  margin-inline: auto;
+}
+.nt-screen__dock { display: grid; gap: var(--space-2); }
+.nt-row { display: flex; align-items: center; gap: var(--space-2); }
+.nt-row--between { justify-content: space-between; }
+.nt-row--end { align-items: flex-end; }
+.nt-row > .nt-btn--grow { flex: 1; }
+.nt-stack { display: grid; justify-items: start; gap: var(--space-1); min-width: 0; }
+.nt-stack--end { justify-items: end; }
+.nt-stack--lg { gap: var(--space-3); }
+/* A short run of cells outside a board: result screens, legends. */
+.nt-cellrow { display: grid; grid-auto-flow: column; grid-auto-columns: calc(var(--cell-min) + var(--space-2)); gap: var(--board-gap); justify-content: center; }
+.nt-cellrow .nt-cell { cursor: default; }
+
+.nt-topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 48px; padding: var(--space-1) var(--space-3); }
+.nt-topbar__title { margin: 0; font: var(--nt-type-title); text-transform: uppercase; -webkit-font-smoothing: none; }
+.nt-topbar__hint { margin: 0; color: var(--text-secondary); font: var(--nt-type-caption); letter-spacing: 0.02em; }
+
+.nt-panel { display: grid; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-1); }
+
+.nt-legend { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.nt-legend__item { display: grid; grid-template-columns: 32px 1fr; align-items: center; gap: var(--space-3); color: var(--text-secondary); font: var(--nt-type-small); }
+.nt-legend__item .nt-cell { --cell-min: 0px; cursor: default; }
+.nt-legend__item strong { color: var(--text-primary); font-weight: 700; }
+
+.nt-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); margin: 0; }
+.nt-stats__item { display: grid; gap: var(--space-1); padding: var(--space-3) var(--space-2); border-radius: var(--radius-md); background: var(--surface-1); text-align: center; }
+.nt-stats__value { margin: 0; font: var(--nt-type-title); -webkit-font-smoothing: none; font-variant-numeric: tabular-nums; }
+.nt-stats__label { margin: 0; color: var(--text-secondary); font: var(--nt-type-caption); letter-spacing: 0.06em; text-transform: uppercase; }
+
+.nt-wordmark { display: block; width: 100%; height: auto; }
+.nt-wordmark__a-top { fill: var(--state-miss-top); }
+.nt-wordmark__a-left { fill: var(--state-miss-left); }
+.nt-wordmark__a-right { fill: var(--state-miss-right); }
+.nt-wordmark__b-top { fill: var(--state-sunk-top); }
+.nt-wordmark__b-left { fill: var(--state-sunk-left); }
+.nt-wordmark__b-right { fill: var(--state-sunk-right); }
+
+/* Tablet and desktop: both boards side by side, yours on the left. */
+.nt-battle { display: grid; gap: var(--space-3); min-width: 0; }
+.nt-battle__side { display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
+@media (min-width: 768px) {
+  .nt-screen--wide { max-width: 1040px; padding-inline: var(--space-6); }
+  .nt-screen--wide .nt-screen__top { margin-inline: calc(var(--space-6) * -1); }
+  .nt-screen--wide .nt-battle { grid-template-columns: 1fr 1fr; gap: var(--space-8); }
+  .nt-screen--wide .nt-screen__board { margin-inline: 0; }
+  .nt-screen--wide { --board-chrome: 250px; }
+  .nt-screen--wide .nt-screen__dock { justify-self: end; width: calc(50% - var(--space-4)); }
+}
+
+/* ---------- 15. Motion ----------
+   Everything that moves lives in this block. With prefers-reduced-motion, or data-motion="reduce"
+   on <html>, none of it applies and the static cues above carry the result. */
+.nt-banner.is-entering { animation: nt-fade var(--dur-quick) linear both; }
+@keyframes nt-fade { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduce"]) .nt-cell[aria-selected="true"]::before,
+  :root:not([data-motion="reduce"]) .nt-cell.is-targeted::before { animation: nt-lock var(--dur-quick) var(--ease-out) both; }
+  :root:not([data-motion="reduce"]) .nt-cell.is-firing::before { animation: nt-fire var(--dur-quick) var(--ease-out) both; }
+
+  :root:not([data-motion="reduce"]) .nt-cell.is-flipping {
+    animation: nt-flip var(--dur-flip) var(--ease-arcade) both;
+    animation-delay: calc(var(--i, 0) * var(--dur-stagger));
+  }
+  :root:not([data-motion="reduce"]) .nt-cell.is-flipping::before {
+    --_top: var(--state-unknown-top);
+    --_left: var(--state-unknown-left);
+    --_right: var(--state-unknown-right);
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    animation: nt-flip-old var(--dur-flip) steps(1, end) both;
+    animation-delay: calc(var(--i, 0) * var(--dur-stagger));
+  }
+  :root:not([data-motion="reduce"]) .nt-cell--from-ship.is-flipping::before { --_top: var(--state-ship-top); --_left: var(--state-ship-left); --_right: var(--state-ship-right); }
+  :root:not([data-motion="reduce"]) .nt-cell--from-hit.is-flipping::before { --_top: var(--state-hit-top); --_left: var(--state-hit-left); --_right: var(--state-hit-right); }
+  :root:not([data-motion="reduce"]) .nt-cell.is-flipping::after {
+    animation:
+      nt-flip-new var(--dur-flip) steps(1, end) both,
+      nt-pop var(--dur-quick) var(--ease-bounce) both;
+    animation-delay:
+      calc(var(--i, 0) * var(--dur-stagger)),
+      calc(var(--i, 0) * var(--dur-stagger) + var(--dur-flip));
+  }
+
+  :root:not([data-motion="reduce"]) .nt-cell.is-sinking {
+    animation: nt-bounce var(--dur-bounce) var(--ease-bounce) both;
+    animation-delay: calc(var(--i, 0) * var(--dur-stagger));
+  }
+  :root:not([data-motion="reduce"]) .nt-board.is-shaking { animation: nt-shake var(--dur-flip) steps(4, end) both; }
+
+  :root:not([data-motion="reduce"]) .nt-banner.is-entering { animation: nt-banner-in var(--dur-turn) var(--ease-out) both; }
+  :root:not([data-motion="reduce"]) .nt-toast.is-entering { animation: nt-toast-in var(--dur-turn) var(--ease-bounce) both; }
+  :root:not([data-motion="reduce"]) .nt-ship { transition: transform var(--dur-quick) var(--ease-out); }
+
+  :root:not([data-motion="reduce"]) .nt-waiting__cube { animation: nt-wait-squash calc(var(--dur-bounce) * 3) var(--ease-arcade) infinite; }
+  :root:not([data-motion="reduce"]) .nt-waiting__cube::before { animation: nt-wait-lit calc(var(--dur-bounce) * 3) steps(1, end) infinite; }
+  :root:not([data-motion="reduce"]) .nt-waiting__cube:nth-child(2),
+  :root:not([data-motion="reduce"]) .nt-waiting__cube:nth-child(2)::before { animation-delay: calc(var(--dur-flip) * 1); }
+  :root:not([data-motion="reduce"]) .nt-waiting__cube:nth-child(3),
+  :root:not([data-motion="reduce"]) .nt-waiting__cube:nth-child(3)::before { animation-delay: calc(var(--dur-flip) * 2); }
+}
+
+@keyframes nt-lock { from { transform: scale(1.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes nt-fire { from { transform: scale(1); opacity: 1; } to { transform: scale(0.5); opacity: 0; } }
+@keyframes nt-flip { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.08); } }
+@keyframes nt-flip-old { 0% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes nt-flip-new { 0% { opacity: 0; } 50%, 100% { opacity: 1; } }
+@keyframes nt-pop { from { transform: scale(0.4); } to { transform: scale(1); } }
+@keyframes nt-bounce { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } }
+@keyframes nt-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+@keyframes nt-banner-in { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes nt-toast-in { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes nt-wait-squash { 0%, 8%, 50%, 58%, 100% { transform: scaleY(1); } 4%, 54% { transform: scaleY(0.08); } }
+@keyframes nt-wait-lit { 0% { opacity: 0; } 4% { opacity: 1; } 54%, 100% { opacity: 0; } }
+
+/* ---------- 16. Forced colours ---------- */
+@media (forced-colors: active) {
+  .nt-cell,
+  .nt-btn,
+  .nt-iconbtn,
+  .nt-seg__option { border: 1px solid ButtonText; forced-color-adjust: none; }
+  .nt-cell:focus-visible,
+  .nt-btn:focus-visible,
+  .nt-iconbtn:focus-visible,
+  .nt-seg__option:focus-visible { outline: 3px solid Highlight; }
+}
