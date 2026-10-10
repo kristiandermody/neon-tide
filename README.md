@@ -19,11 +19,15 @@ npm ci
 npm run dev        # local Worker via wrangler dev
 npm run typecheck
 npm test           # unit tests in test/
+npm run e2e        # Playwright E2E (iPhone WebKit + Pixel Chromium) against E2E_BASE_URL, default http://localhost:8787
+npm run smoke -- https://neon-tide-staging.kristian-dermody-personal-account.workers.dev
 ```
+
+First E2E run on a machine: `npx playwright install chromium webkit`.
 
 ## CI and deploy
 
 - Pull requests to `main` run typecheck and unit tests (`.github/workflows/ci.yml`).
-- Every merge to `main` deploys staging, then production once staging succeeds (`.github/workflows/deploy.yml`).
+- Every merge to `main` deploys staging, runs the curl smoke test and the Playwright E2E suite against it, then deploys production and smoke-tests it (`.github/workflows/deploy.yml`).
   - Staging: https://neon-tide-staging.kristian-dermody-personal-account.workers.dev
   - Production: https://neon-tide.kristiandermody.com
