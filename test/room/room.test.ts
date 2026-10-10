@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomFleet, seededRng, shipCells, type Placement, type Seat } from "../../src/engine/index.ts";
 import { GAME_ID_PATTERN, newGameId } from "../../src/room/ids.ts";
 import { parseClientMessage, type ServerMessage } from "../../src/room/protocol.ts";
-import { COMPUTER, RULES, claimSeat, createRoom, handle, stateFor, type RoomRecord } from "../../src/room/room.ts";
+import { COMPUTER, EXPIRY_MS, GRACE_MS, RULES, claimSeat, createRoom, handle, markBack, markGone, nextAlarm, stateFor, tick, upgrade, type RoomRecord } from "../../src/room/room.ts";
 
 const ALICE = "a".repeat(32);
 const BOB = "b".repeat(32);
@@ -24,7 +24,7 @@ function playComputerGame(seed: number): { room: RoomRecord; seen: ServerMessage
       assert.equal(o.to, 0, "computer seat never receives messages");
       seen.push(o.msg);
     }
-    seen.push(stateFor(room, 0, false));
+    seen.push(stateFor(room, 0));
     return r;
   };
   run({ type: "place", fleet: randomFleet(RULES, rng) });
@@ -90,7 +90,7 @@ test("errors go only to the sender and change nothing", () => {
 test("a full game against the computer finishes with a winner and results for both sides", () => {
   const { room, seen } = playComputerGame(3);
   assert.equal(room.game.phase, "over");
-  const final = stateFor(room, 0, false);
+  const final = stateFor(room, 0);
   assert.equal(final.phase, "over");
   assert.ok(final.winner === "you" || final.winner === "opponent");
   const results = seen.filter((m) => m.type === "result");
@@ -134,7 +134,7 @@ test("seats: a friend room seats the joiner once and resumes known tokens", () =
   assert.deepEqual(claimSeat(room, { type: "join", token: BOB }), { seat: 1, joined: false });
   assert.equal((claimSeat(room, { type: "join", token: "c".repeat(32) }) as { code: string }).code, "game_full");
   const seat: Seat = 1;
-  assert.equal(stateFor(room, seat, true).opponentJoined, true);
+  assert.equal(stateFor(room, seat).opponentJoined, true);
 });
 
 test("friend room: two players finish a game; neither ever sees the other's unhit ships", () => {
@@ -145,13 +145,13 @@ test("friend room: two players finish a game; neither ever sees the other's unhi
   const act = (seat: Seat, msg: Parameters<typeof handle>[2]) => {
     const r = handle(room, seat, msg, 1, rng);
     for (const o of r.out) seen[o.to].push(o.msg);
-    if (r.changed) for (const s of [0, 1] as Seat[]) seen[s].push(stateFor(room, s, true));
+    if (r.changed) for (const s of [0, 1] as Seat[]) seen[s].push(stateFor(room, s));
     return r;
   };
   act(0, { type: "place", fleet: randomFleet(RULES, rng) });
   act(0, { type: "ready" });
   assert.equal(room.game.phase, "placing", "play waits for both fleets");
-  assert.equal(stateFor(room, 1, true).opponentReady, true);
+  assert.equal(stateFor(room, 1).opponentReady, true);
   act(1, { type: "place", fleet: randomFleet(RULES, rng) });
   act(1, { type: "ready" });
   assert.equal(room.game.phase, "playing");
@@ -178,7 +178,57 @@ test("friend room: two players finish a game; neither ever sees the other's unhi
       }
       if (msg.type === "result" && msg.by === "you") for (const c of msg.sunkCells ?? []) assert.ok(shot.has(c));
     }
-    const final = stateFor(room, seat, true);
+    const final = stateFor(room, seat);
     assert.equal(final.winner, room.game.winner === seat ? "you" : "opponent");
   }
+});
+
+test("a dropped player is reported only after the 2-minute grace, and reconnecting clears it", () => {
+  const room = createRoom("x", "friend", ALICE, 0, seededRng(5));
+  claimSeat(room, { type: "join", token: BOB });
+  markGone(room, 1, 1000);
+  assert.equal(nextAlarm(room), 1000 + GRACE_MS);
+  assert.deepEqual(tick(room, 1000 + GRACE_MS - 1).newlyAway, []);
+  assert.equal(stateFor(room, 0).opponentConnected, true, "inside the grace period the opponent still looks connected");
+  assert.deepEqual(tick(room, 1000 + GRACE_MS).newlyAway, [1]);
+  assert.equal(stateFor(room, 0).opponentConnected, false);
+  assert.deepEqual(tick(room, 1000 + GRACE_MS + 5).newlyAway, [], "reported once");
+  assert.equal(markBack(room, 1, 2000 + GRACE_MS), true);
+  assert.equal(stateFor(room, 0).opponentConnected, true);
+  markGone(room, 1, 10_000);
+  assert.equal(markBack(room, 1, 10_001), false, "a quick reconnect was never reported");
+});
+
+test("the computer seat is never marked away", () => {
+  const room = createRoom("x", "computer", ALICE, 0, seededRng(6));
+  markGone(room, 1, 0);
+  assert.equal(room.goneAt[1], null);
+});
+
+test("unfinished games expire after 24h without activity; finished games never expire", () => {
+  const room = createRoom("x", "friend", ALICE, 0, seededRng(7));
+  assert.equal(nextAlarm(room), EXPIRY_MS);
+  assert.equal(tick(room, EXPIRY_MS - 1).expired, false);
+  handle(room, 0, { type: "place", fleet: stacked() }, 5000, seededRng(7));
+  assert.equal(nextAlarm(room), 5000 + EXPIRY_MS, "activity pushes expiry back");
+  assert.equal(tick(room, 5000 + EXPIRY_MS).expired, true);
+  assert.equal(stateFor(room, 0).phase, "expired");
+  assert.equal(nextAlarm(room), null);
+  assert.equal((handle(room, 0, { type: "ready" }, 0, seededRng(7)).out[0].msg as { code: string }).code, "expired");
+  assert.equal((claimSeat(room, { type: "join", token: BOB }) as { code: string }).code, "expired");
+  assert.deepEqual(claimSeat(room, { type: "resume", token: ALICE }), { seat: 0, joined: false }, "players can still see the end state");
+
+  const { room: done } = playComputerGame(8);
+  assert.equal(nextAlarm(done), null);
+  assert.equal(tick(done, Number.MAX_SAFE_INTEGER).expired, false);
+  assert.equal(stateFor(done, 0).phase, "over");
+});
+
+test("records stored before reconnect fields existed are upgraded", () => {
+  const old = createRoom("x", "friend", ALICE, 0, seededRng(9)) as Partial<RoomRecord>;
+  delete old.goneAt;
+  delete old.away;
+  const room = upgrade(old as RoomRecord);
+  assert.deepEqual(room.goneAt, [null, null]);
+  assert.deepEqual(room.away, [false, false]);
 });

@@ -20,6 +20,10 @@ import {
 import type { ClientMessage, ErrorMessage, Mode, ResultMessage, ServerMessage, Side, StateMessage } from "./protocol.ts";
 
 export const RULES: RulesConfig = CLASSIC_RULES;
+/** A dropped player is reported to the opponent only after this long (spec section 6). */
+export const GRACE_MS = 2 * 60 * 1000;
+/** Unfinished games expire after this long without activity (spec section 6). */
+export const EXPIRY_MS = 24 * 60 * 60 * 1000;
 /** Seat token used for the computer. Real tokens are 32 hex characters, so this can never collide. */
 export const COMPUTER = "computer";
 
@@ -32,6 +36,10 @@ export interface RoomRecord {
   seats: [string | null, string | null];
   game: GameState;
   expired: boolean;
+  /** When each seat lost its last connection, or null while connected. */
+  goneAt: [number | null, number | null];
+  /** Seats whose absence has been reported to the opponent. */
+  away: [boolean, boolean];
 }
 
 export interface Outgoing {
@@ -55,6 +63,8 @@ export function createRoom(id: string, mode: Mode, creatorToken: string, now: nu
     seats: [creatorToken, null],
     game: newGame(),
     expired: false,
+    goneAt: [null, null],
+    away: [false, false],
   };
   if (mode === "computer") {
     room.seats[1] = COMPUTER;
@@ -174,7 +184,7 @@ export function handle(room: RoomRecord, seat: Seat, msg: ClientMessage, now: nu
 }
 
 /** The personalized snapshot for one seat. Never includes the opponent's fleet. */
-export function stateFor(room: RoomRecord, seat: Seat, opponentConnected: boolean): StateMessage {
+export function stateFor(room: RoomRecord, seat: Seat): StateMessage {
   const me = room.game.players[seat];
   const opp = room.game.players[other(seat)];
   return {
@@ -188,10 +198,61 @@ export function stateFor(room: RoomRecord, seat: Seat, opponentConnected: boolea
     yourReady: me.ready,
     opponentReady: opp.ready,
     opponentJoined: room.seats[other(seat)] !== null,
-    opponentConnected: room.seats[other(seat)] === COMPUTER || opponentConnected,
+    opponentConnected: !room.away[other(seat)],
     yourShots: shotsAt(RULES, opp),
     opponentShots: shotsAt(RULES, me),
     yourSunk: sunkShips(RULES, me),
     opponentSunk: sunkShips(RULES, opp),
   };
+}
+
+/** Fills fields added after a record was first stored. */
+export function upgrade(room: RoomRecord): RoomRecord {
+  room.goneAt ??= [null, null];
+  room.away ??= [false, false];
+  return room;
+}
+
+/** The seat's last connection closed. */
+export function markGone(room: RoomRecord, seat: Seat, now: number): void {
+  if (room.seats[seat] === COMPUTER || room.goneAt[seat] !== null) return;
+  room.goneAt[seat] = now;
+}
+
+/** The seat reconnected. Returns true if the opponent had been told it was away. */
+export function markBack(room: RoomRecord, seat: Seat, now: number): boolean {
+  const wasAway = room.away[seat];
+  room.goneAt[seat] = null;
+  room.away[seat] = false;
+  room.updatedAt = now;
+  return wasAway;
+}
+
+/** Time-driven changes: grace periods that ran out, and 24h expiry. */
+export function tick(room: RoomRecord, now: number): { newlyAway: Seat[]; expired: boolean } {
+  const live = !room.expired && room.game.phase !== "over";
+  const newlyAway: Seat[] = [];
+  if (live) {
+    for (const seat of [0, 1] as Seat[]) {
+      const gone = room.goneAt[seat];
+      if (gone !== null && !room.away[seat] && now - gone >= GRACE_MS) {
+        room.away[seat] = true;
+        newlyAway.push(seat);
+      }
+    }
+  }
+  const expired = live && now - room.updatedAt >= EXPIRY_MS;
+  if (expired) room.expired = true;
+  return { newlyAway, expired };
+}
+
+/** When tick() next needs to run, or null if nothing is pending. */
+export function nextAlarm(room: RoomRecord): number | null {
+  if (room.expired || room.game.phase === "over") return null;
+  const times = [room.updatedAt + EXPIRY_MS];
+  for (const seat of [0, 1] as Seat[]) {
+    const gone = room.goneAt[seat];
+    if (gone !== null && !room.away[seat]) times.push(gone + GRACE_MS);
+  }
+  return Math.min(...times);
 }
