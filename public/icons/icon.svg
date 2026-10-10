@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Neon Tide app icon: a sunk cube (magenta top, bevel sides, solid block with the X cut out). Colours from tokens.css. -->
+  <rect width="512" height="512" fill="#070a14"/>
+  <g transform="translate(136 128)">
+    <rect width="240" height="240" fill="#ff52bd"/>
+    <path d="M0 240h120v24H0z" fill="#b81f84"/>
+    <path d="M120 240h120v24H120z" fill="#73135a"/>
+    <path d="M0 228l120 12L0 240z" fill="#ff52bd"/>
+    <path d="M240 228l-120 12h120z" fill="#ff52bd"/>
+    <rect x="46" y="46" width="148" height="148" fill="#070a14"/>
+    <path d="M58 76l18-18 44 44 44-44 18 18-44 44 44 44-18 18-44-44-44 44-18-18 44-44z" fill="#ff52bd"/>
+  </g>
+</svg>
