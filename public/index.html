@@ -7,10 +7,35 @@
   <meta name="color-scheme" content="dark">
   <title>Neon Tide</title>
   <meta name="description" content="Neon Tide: Sink Cube. A naval grid game for phones. Play a friend or the computer.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Neon Tide">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!-- Link previews (iMessage, WhatsApp). Image URL must be absolute; it points at production. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Neon Tide">
+  <meta property="og:title" content="Neon Tide: Sink Cube">
+  <meta property="og:description" content="A naval grid game for phones. Tap to join the game.">
+  <meta property="og:image" content="https://neon-tide.kristiandermody.com/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Neon Tide wordmark in cyan and magenta pixel cubes, with the tagline Sink Cube">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/neon-tide.css">
   <style>
     /* Page layout only; every visual comes from tokens.css and the nt- components. */
+    /* Installed (standalone) on iOS the page draws under the status bar and the side notch. */
+    .nt-screen { padding-top: env(safe-area-inset-top); }
+    @media (max-width: 767px) {
+      .nt-screen {
+        padding-left: max(var(--space-2), env(safe-area-inset-left));
+        padding-right: max(var(--space-2), env(safe-area-inset-right));
+      }
+    }
     .home { gap: var(--space-6); }
     .home__mark { width: 276px; max-width: 100%; margin: 0; }
     .home__tag { margin: 0; color: var(--state-sunk-top); }
