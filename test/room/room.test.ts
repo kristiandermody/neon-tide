@@ -136,3 +136,49 @@ test("seats: a friend room seats the joiner once and resumes known tokens", () =
   const seat: Seat = 1;
   assert.equal(stateFor(room, seat, true).opponentJoined, true);
 });
+
+test("friend room: two players finish a game; neither ever sees the other's unhit ships", () => {
+  const rng = seededRng(21);
+  const room = createRoom("x", "friend", ALICE, 0, rng);
+  assert.deepEqual(claimSeat(room, { type: "join", token: BOB }), { seat: 1, joined: true });
+  const seen: [ServerMessage[], ServerMessage[]] = [[], []];
+  const act = (seat: Seat, msg: Parameters<typeof handle>[2]) => {
+    const r = handle(room, seat, msg, 1, rng);
+    for (const o of r.out) seen[o.to].push(o.msg);
+    if (r.changed) for (const s of [0, 1] as Seat[]) seen[s].push(stateFor(room, s, true));
+    return r;
+  };
+  act(0, { type: "place", fleet: randomFleet(RULES, rng) });
+  act(0, { type: "ready" });
+  assert.equal(room.game.phase, "placing", "play waits for both fleets");
+  assert.equal(stateFor(room, 1, true).opponentReady, true);
+  act(1, { type: "place", fleet: randomFleet(RULES, rng) });
+  act(1, { type: "ready" });
+  assert.equal(room.game.phase, "playing");
+
+  const next: [number, number] = [0, 0];
+  while (room.game.phase === "playing") {
+    const seat = room.game.turn!;
+    const target = room.game.players[seat === 0 ? 1 : 0];
+    while (target.shotsReceived.includes(next[seat])) next[seat]++;
+    const wrong = handle(room, seat === 0 ? 1 : 0, { type: "fire", cell: 0 }, 1, rng);
+    assert.equal((wrong.out[0].msg as { code: string }).code, "not_your_turn");
+    act(seat, { type: "fire", cell: next[seat] });
+  }
+  assert.ok(room.game.winner === 0 || room.game.winner === 1);
+
+  for (const seat of [0, 1] as Seat[]) {
+    const enemy = room.game.players[seat === 0 ? 1 : 0];
+    const shot = new Set(enemy.shotsReceived);
+    const own = JSON.stringify(room.game.players[seat].fleet);
+    for (const msg of seen[seat]) {
+      if (msg.type === "state") {
+        assert.ok(msg.yourFleet === null || JSON.stringify(msg.yourFleet) === own, "only your own fleet, or none yet");
+        for (const s of msg.yourShots) for (const c of [s.cell, ...(s.sunkCells ?? [])]) assert.ok(shot.has(c));
+      }
+      if (msg.type === "result" && msg.by === "you") for (const c of msg.sunkCells ?? []) assert.ok(shot.has(c));
+    }
+    const final = stateFor(room, seat, true);
+    assert.equal(final.winner, room.game.winner === seat ? "you" : "opponent");
+  }
+});

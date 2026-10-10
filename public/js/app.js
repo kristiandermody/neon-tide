@@ -77,7 +77,8 @@ function homeScreen() {
       btn.disabled = false;
     }
   };
-  const vsComputer = h("button.nt-btn.nt-btn--primary.nt-btn--block", { type: "button", onclick: () => start("computer", vsComputer) }, "Play the computer");
+  const vsFriend = h("button.nt-btn.nt-btn--primary.nt-btn--block", { type: "button", onclick: () => start("friend", vsFriend) }, "Play a friend");
+  const vsComputer = h("button.nt-btn.nt-btn--block", { type: "button", onclick: () => start("computer", vsComputer) }, "Play the computer");
 
   const el = h(
     "main.nt-screen",
@@ -90,7 +91,7 @@ function homeScreen() {
       h("p.nt-arcade.nt-arcade--label.home__tag", {}, "Sink Cube"),
       h("p.nt-small.nt-text-secondary.home__line", {}, "A naval grid game. Hide five ships, then take turns firing until one fleet is gone."),
     ),
-    h("div.nt-screen__dock", {}, vsComputer, status),
+    h("div.nt-screen__dock", {}, vsFriend, vsComputer, status),
   );
   return { el };
 }
@@ -104,6 +105,48 @@ function messageScreen(title, body) {
     h("div.nt-screen__dock", {}, h("button.nt-btn.nt-btn--primary.nt-btn--block", { type: "button", onclick: () => navigate("/") }, "New game")),
   );
   return { el };
+}
+
+// ---------- Share link ----------
+
+function sharePanel(url) {
+  const input = h("input.nt-share__input", { id: "share-link", type: "text", readOnly: true, value: url, onfocus: (e) => e.target.select() });
+  const status = h("p.nt-share__status", { role: "status" });
+  const canShare = typeof navigator.share === "function";
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      input.focus();
+      input.select();
+      if (!document.execCommand?.("copy")) {
+        status.textContent = "Select the link and copy it.";
+        return;
+      }
+    }
+    status.textContent = "Link copied.";
+  };
+  const share = async () => {
+    status.textContent = "";
+    if (!canShare) return copy();
+    try {
+      await navigator.share({ title: "Neon Tide", text: "Play Neon Tide with me. Sink Cube!", url });
+    } catch (err) {
+      if (err?.name !== "AbortError") await copy();
+    }
+  };
+  return h(
+    "div.nt-share",
+    {},
+    h("label.nt-share__label", { for: "share-link" }, "Invite link"),
+    h(
+      "div.nt-share__row",
+      {},
+      input,
+      h("button.nt-btn", { type: "button", onclick: share, "aria-label": canShare ? "Share invite link" : "Copy invite link" }, canShare ? icon("share") : null, canShare ? "Share" : "Copy"),
+    ),
+    status,
+  );
 }
 
 // ---------- Fleet tracker ----------
@@ -199,6 +242,8 @@ class GameScreen {
       if (msg.type === "state") {
         this.vm = msg;
         this.render();
+      } else if (msg.type === "opponent_status") {
+        this.opponentStatus(msg.status);
       } else if (msg.type === "result" && this.vm) {
         this.applyResult(msg);
         this.render();
@@ -206,6 +251,14 @@ class GameScreen {
       }
     }
     this.busy = false;
+    if (this.vm?.phase === "over" && this.kind === "battle") this.showGameOver();
+  }
+
+  opponentStatus(status) {
+    if (status === "joined") {
+      play("tap");
+      toast("Friend joined", "They are placing their fleet.");
+    }
   }
 
   applyResult(r) {
@@ -247,7 +300,7 @@ class GameScreen {
       toast(mine ? "Sunk" : `${this.opponentName} sank`, mine ? `${name} destroyed` : `Your ${name}`, "sunk");
     }
     await sleep(tokenMs("--dur-hold") + (r.result === "sunk" ? tokenMs("--dur-bounce") : tokenMs("--dur-flip")));
-    if (r.winner) this.showGameOver();
+    if (r.winner) this.showGameOver(true);
   }
 
   // ----- render dispatch -----
@@ -260,10 +313,11 @@ class GameScreen {
       this.el.replaceChildren(messageScreen("Game expired", "This game sat idle for 24 hours and has ended.").el);
       return;
     }
+    const inviting = vm.mode === "friend" && !vm.opponentJoined;
+    if (vm.phase === "placing" && !vm.yourReady && inviting && !this.lobbyDone) return this.ensure("lobby", () => this.buildLobby(), () => {});
     if (vm.phase === "placing" && !vm.yourReady) return this.ensure("placing", () => this.buildPlacing(), () => this.renderPlacing());
-    if (vm.phase === "placing") return this.ensure("waiting", () => this.buildWaiting(), () => {});
+    if (vm.phase === "placing") return this.ensure(`waiting-${inviting}`, () => this.buildWaiting(inviting), () => {});
     this.ensure("battle", () => this.buildBattle(), () => this.renderBattle());
-    if (vm.phase === "over" && !this.busy) this.showGameOver();
   }
 
   ensure(kind, build, update) {
@@ -412,25 +466,54 @@ class GameScreen {
     else this.readyBtn.disabled = true;
   }
 
-  // ----- waiting (friend has not readied) -----
+  // ----- lobby and waiting (friend games) -----
 
-  buildWaiting() {
+  get link() {
+    return `${location.origin}/g/${this.id}`;
+  }
+
+  waiting(label, hint) {
+    return h(
+      "div.nt-waiting",
+      {},
+      h("div.nt-waiting__cubes", { "aria-hidden": "true" }, h("span.nt-waiting__cube"), h("span.nt-waiting__cube"), h("span.nt-waiting__cube")),
+      h("p.nt-waiting__label", {}, label),
+      h("p.nt-waiting__hint", {}, hint),
+    );
+  }
+
+  buildLobby() {
     return h(
       "main.nt-screen",
       {},
-      h("div.nt-screen__top", {}, h("div.nt-topbar", {}, h("h1.nt-topbar__title", {}, "Ready"), muteButton())),
+      h("div.nt-screen__top", {}, h("div.nt-topbar", {}, h("h1.nt-topbar__title", {}, "Invite a friend"), muteButton())),
       h(
         "div.nt-screen__main.nt-screen__main--center",
         {},
-        h(
-          "div.nt-waiting",
-          {},
-          h("div.nt-waiting__cubes", { "aria-hidden": "true" }, h("span.nt-waiting__cube"), h("span.nt-waiting__cube"), h("span.nt-waiting__cube")),
-          h("p.nt-waiting__label", {}, `Waiting for ${this.opponentName.toLowerCase()}`),
-          h("p.nt-waiting__hint", {}, "Your fleet is locked in. The game starts when both fleets are ready."),
-        ),
+        this.waiting("Waiting for a friend", "Send this link to one friend. You can place your fleet while you wait."),
       ),
-      h("div"),
+      h(
+        "div.nt-screen__dock",
+        {},
+        sharePanel(this.link),
+        h("button.nt-btn.nt-btn--primary.nt-btn--block", { type: "button", onclick: () => ((this.lobbyDone = true), this.render()) }, "Place your fleet"),
+      ),
+    );
+  }
+
+  buildWaiting(inviting) {
+    return h(
+      "main.nt-screen",
+      {},
+      h("div.nt-screen__top", {}, h("div.nt-topbar", {}, h("h1.nt-topbar__title", {}, "Fleet ready"), muteButton())),
+      h(
+        "div.nt-screen__main.nt-screen__main--center",
+        {},
+        inviting
+          ? this.waiting("Waiting for a friend", "Your fleet is locked in. Send the link; the game starts when your friend is ready.")
+          : this.waiting(`Waiting for ${this.opponentName.toLowerCase()}`, "Your fleet is locked in. The game starts when both fleets are ready."),
+      ),
+      inviting ? h("div.nt-screen__dock", {}, sharePanel(this.link)) : h("div"),
     );
   }
 
@@ -527,14 +610,14 @@ class GameScreen {
     this.renderBattle();
   }
 
-  showGameOver() {
+  showGameOver(withSound = false) {
     if (this.dialog?.open) return;
     const vm = this.vm;
     const won = vm.winner === "you";
     const shots = vm.yourShots.length;
     const hits = vm.yourShots.filter((s) => s.result !== "miss").length;
     const accuracy = shots ? Math.round((hits / shots) * 100) : 0;
-    play(won ? "win" : "lose");
+    if (withSound) play(won ? "win" : "lose");
     this.dialog = h(
       "dialog.nt-modal",
       { "aria-labelledby": "over-title" },
