@@ -4,28 +4,50 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
 
-  // Durable Object bindings, migrations, assets and routes are configured per
-  // environment below. Always deploy with --env staging or --env production.
+  // Durable Object bindings, migrations, assets and routes are not inherited by
+  // environments, so each environment repeats them. Always deploy with --env.
+  // Assets: unknown paths (e.g. /g/<id>) fall back to index.html; only /api/* and
+  // /ws/* run the Worker first.
   "env": {
     "staging": {
       "name": "neon-tide-staging",
       "workers_dev": true,
       "routes": [],
-      "assets": { "directory": "./public" },
-      "durable_objects": {
-        "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }]
+      "assets": {
+        "directory": "./public",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/api/*", "/ws/*"]
       },
-      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }]
+      "durable_objects": {
+        "bindings": [
+          { "name": "GAME_ROOM", "class_name": "GameRoom" },
+          { "name": "CREATE_LIMITER", "class_name": "CreateLimiter" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
+        { "tag": "v2", "new_sqlite_classes": ["CreateLimiter"] }
+      ]
     },
     "production": {
       "name": "neon-tide",
       "workers_dev": false,
       "routes": [{ "pattern": "neon-tide.kristiandermody.com", "custom_domain": true }],
-      "assets": { "directory": "./public" },
-      "durable_objects": {
-        "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }]
+      "assets": {
+        "directory": "./public",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/api/*", "/ws/*"]
       },
-      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }]
+      "durable_objects": {
+        "bindings": [
+          { "name": "GAME_ROOM", "class_name": "GameRoom" },
+          { "name": "CREATE_LIMITER", "class_name": "CreateLimiter" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
+        { "tag": "v2", "new_sqlite_classes": ["CreateLimiter"] }
+      ]
     }
   }
 }
