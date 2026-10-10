@@ -2,7 +2,9 @@
 
 Browser-based naval grid game for phones. Tagline: Sink Cube.
 
-Status: Phase 1 in progress. See `docs/spec.md` for the frozen spec and `docs/decisions.md` for the decision log.
+Status: Phase 1 built and live (staging and production); final acceptance on real iPhones pending.
+See `docs/spec.md` (frozen Phase 1 spec), `docs/decisions.md` (decision log), `docs/backlog.md` (v2 candidates and bugs),
+and `docs/sessions/` (session reports and handoffs).
 
 ## Stack
 

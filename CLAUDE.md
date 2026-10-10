@@ -3,6 +3,7 @@
 Read before doing anything:
 1. `docs/spec.md` is the frozen Phase 1 spec and the single source of truth.
 2. `docs/decisions.md` is the decision log. Append every decision the spec does not cover.
+3. The latest handoff in `docs/sessions/` (currently `2026-10-10-build-session-handoff.md`) and `docs/backlog.md` (v2 candidates, known issues, bugs).
 
 Rules:
 - Build Phase 1 only. Never build anything in the spec's Phase 2 backlog.
