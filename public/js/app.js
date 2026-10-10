@@ -1,7 +1,7 @@
 // Neon Tide client: routing, screens, and the game view. Server-authoritative: the client renders
 // what the GameRoom sends and only keeps a local draft of the fleet before Ready.
 import { Board } from "./board.js";
-import { h, icon, sleep, tokenMs } from "./dom.js";
+import { h, icon, reducedMotion, sleep, tokenMs } from "./dom.js";
 import { isMuted, onMuteChange, play, setMuted, unlockAudio } from "./feedback.js";
 import { FLEET, SIZE, cellLabel, fits, occupancy, randomLayout, shipCells, shipLength, shipName } from "./fleet.js";
 import { Connection } from "./net.js";
@@ -319,7 +319,8 @@ class GameScreen {
       board?.flip(r.sunkCells ?? [r.cell], "hit", true);
       toast(mine ? "Sunk" : `${this.opponentName} sank`, mine ? `${name} destroyed` : `Your ${name}`, "sunk");
     }
-    await sleep(tokenMs("--dur-hold") + (r.result === "sunk" ? tokenMs("--dur-bounce") : tokenMs("--dur-flip")));
+    // Hold so the result can be read before the turn flips; without motion there is nothing to wait out.
+    await sleep(reducedMotion() ? tokenMs("--dur-turn") : tokenMs("--dur-hold") + (r.result === "sunk" ? tokenMs("--dur-bounce") : tokenMs("--dur-flip")));
     if (r.winner) this.showGameOver(true);
   }
 
