@@ -10,7 +10,8 @@ import {
   placeFleet,
   randomFleet,
   seededRng,
-  shotsAt,
+  shotsSeenBy,
+  type SeenShot,
   type Shot,
 } from "../../src/engine/index.ts";
 
@@ -27,7 +28,7 @@ function shotsToWin(seed: number): number {
   let shots = 0;
   const filler = [...Array(100).keys()];
   while (game.phase === "playing") {
-    const cell = chooseShot(R, shotsAt(R, game.players[1]), rng);
+    const cell = chooseShot(R, shotsSeenBy(R, game.players[1]), rng);
     const result = fire(R, game, 0, cell);
     assert.ok(result.ok, `AI picked an illegal cell ${cell}`);
     shots++;
@@ -64,23 +65,23 @@ test("never fires at a shot cell and treats misses as blocked", () => {
 });
 
 test("after a hit it fires next to the hit", () => {
-  const shots: Shot[] = [{ cell: 44, result: "hit", ship: "cruiser" }];
+  const shots: Shot[] = [{ cell: 44, result: "hit" }];
   for (let seed = 0; seed < 10; seed++) assert.ok([34, 43, 45, 54].includes(chooseShot(R, shots, seededRng(seed))));
 });
 
 test("after two hits in a line it continues along that line", () => {
   const shots: Shot[] = [
-    { cell: 44, result: "hit", ship: "carrier" },
-    { cell: 45, result: "hit", ship: "carrier" },
+    { cell: 44, result: "hit" },
+    { cell: 45, result: "hit" },
   ];
   for (let seed = 0; seed < 10; seed++) assert.ok([41, 42, 43, 46, 47, 48].includes(chooseShot(R, shots, seededRng(seed))));
   assert.ok([43, 46].includes(chooseShot(R, shots, seededRng(1))), "adjacent ends score highest");
 });
 
 test("sunk ships are removed and their wreck blocks placements", () => {
-  const shots: Shot[] = [
-    { cell: 0, result: "hit", ship: "destroyer" },
-    { cell: 1, result: "sunk", ship: "destroyer" },
+  const shots: SeenShot[] = [
+    { cell: 0, result: "hit" },
+    { cell: 1, result: "sunk", ship: "destroyer", sunkCells: [0, 1] },
   ];
   const heat = heatmap(R, shots);
   assert.equal(heat[0], -1);
@@ -90,14 +91,15 @@ test("sunk ships are removed and their wreck blocks placements", () => {
   assert.ok([44, 45, 54, 55].every((c) => heat[c] === max));
 });
 
-test("a hit known to be another ship's is not used to place this ship", () => {
-  const shots: Shot[] = [
-    { cell: 0, result: "hit", ship: "destroyer" },
-    { cell: 2, result: "hit", ship: "cruiser" },
+test("hits not yet part of a wreck keep the hunt going without knowing which ship they are", () => {
+  const shots: SeenShot[] = [
+    { cell: 0, result: "hit" },
+    { cell: 1, result: "sunk", ship: "destroyer", sunkCells: [1, 2] },
   ];
-  // The destroyer must cover cell 0 and cannot cover cell 2, so it sits at 0-1 or 0-10.
+  // Cell 0 is still unexplained, so only placements covering it count, and the wreck at 1-2 blocks the row.
   const heat = heatmap(R, shots);
-  assert.ok(heat[1] > 0 && heat[10] > 0);
+  assert.ok(heat[10] > 0, "continues down from the open hit");
+  assert.equal(heat[3], 0, "the far side of the wreck cannot reach cell 0");
 });
 
 test("beats random fleets well under 100 shots on average (hard difficulty)", () => {

@@ -8,6 +8,7 @@ import {
   placeFleet,
   seededRng,
   shotsAt,
+  shotsSeenBy,
   sunkShips,
   type GameState,
   type Placement,
@@ -104,6 +105,18 @@ test("shotsAt replays results as the shooter saw them, without revealing unhit s
   assert.deepEqual(seen.map((s) => s.result), ["hit", "miss", "sunk"]);
   const revealed = new Set(seen.flatMap((s) => [s.cell, ...(s.sunkCells ?? [])]));
   assert.deepEqual([...revealed].sort((x, y) => x - y), [40, 41, 99]);
+});
+
+test("the shooter's view of a plain hit does not name the ship, but a sunk shot does", () => {
+  const game = started();
+  fire(R, game, 0, 40);
+  fire(R, game, 1, 99);
+  fire(R, game, 0, 41);
+  assert.equal(shotsAt(R, game.players[1])[0].ship, "destroyer", "the defender's own record keeps the name");
+  const seen = shotsSeenBy(R, game.players[1]);
+  assert.deepEqual(seen.map((s) => s.result), ["hit", "sunk"]);
+  assert.ok(!("ship" in seen[0]));
+  assert.equal(seen[1].ship, "destroyer");
 });
 
 test("sinking the whole fleet wins and ends the game", () => {

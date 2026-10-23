@@ -10,6 +10,7 @@ import {
   placeFleet,
   randomFleet,
   shotsAt,
+  shotsSeenBy,
   sunkShips,
   type GameState,
   type Rng,
@@ -126,7 +127,8 @@ function resultFor(viewer: Seat, shot: ShotOutcome): ResultMessage {
     result: shot.result,
     winner: side(viewer, shot.winner),
   };
-  if (shot.ship) msg.ship = shot.ship;
+  // The shooter learns a ship's identity only when it sinks; the defender knows their own fleet.
+  if (shot.ship && (shot.by !== viewer || shot.result === "sunk")) msg.ship = shot.ship;
   if (shot.sunkCells) msg.sunkCells = shot.sunkCells;
   return msg;
 }
@@ -143,7 +145,7 @@ function announce(room: RoomRecord, shot: ShotOutcome): Outgoing[] {
 /** Lets the computer move for as long as it holds the turn (it only ever fires once per turn). */
 function computerTurn(room: RoomRecord, rng: Rng): Outgoing[] {
   if (room.mode !== "computer" || room.game.phase !== "playing" || room.game.turn !== 1) return [];
-  const cell = chooseShot(RULES, shotsAt(RULES, room.game.players[0]), rng);
+  const cell = chooseShot(RULES, shotsSeenBy(RULES, room.game.players[0]), rng);
   const shot = fire(RULES, room.game, 1, cell);
   if (!shot.ok) throw new Error(`computer fired illegally: ${shot.error}`);
   return announce(room, shot.value);
@@ -199,7 +201,7 @@ export function stateFor(room: RoomRecord, seat: Seat): StateMessage {
     opponentReady: opp.ready,
     opponentJoined: room.seats[other(seat)] !== null,
     opponentConnected: !room.away[other(seat)],
-    yourShots: shotsAt(RULES, opp),
+    yourShots: shotsSeenBy(RULES, opp),
     opponentShots: shotsAt(RULES, me),
     yourSunk: sunkShips(RULES, me),
     opponentSunk: sunkShips(RULES, opp),

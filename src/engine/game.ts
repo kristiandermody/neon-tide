@@ -23,7 +23,7 @@ export interface GameState {
 export interface Shot {
   cell: Cell;
   result: ShotResult;
-  /** Ship id for hit and sunk; absent for a miss. */
+  /** Ship id for hit and sunk; absent for a miss. The shooter only learns it on sunk (see `shooterView`). */
   ship?: string;
 }
 
@@ -136,9 +136,24 @@ function isFleetSunk(rules: RulesConfig, player: PlayerState): boolean {
 /**
  * Shots fired at `defender`, each as the shooter saw it at the time.
  * A sunk shot lists the ship's cells so the shooter can mark the whole wreck.
- * This is all a shooter may know about the defender's board.
+ * Hits still name their ship here (the defender knows their own fleet); a shooter's view goes through `shotsSeenBy`.
  */
 export function shotsAt(rules: RulesConfig, defender: PlayerState): Array<Shot & { sunkCells?: Cell[] }> {
   if (!defender.fleet) return [];
   return defender.shotsReceived.map((cell, i) => resolve(rules, defender, cell, i));
+}
+
+/**
+ * A shot as the shooter may see it: a plain hit does not say which ship was hit, so the shooter only
+ * learns a ship's identity once every cell of it is hit.
+ */
+export function shooterView<T extends Shot>(shot: T): T {
+  if (shot.result !== "hit") return shot;
+  const { ship: _ship, ...rest } = shot;
+  return rest as T;
+}
+
+/** Shots fired at `defender`, as the shooter saw them. This is all a shooter may know about the defender's board. */
+export function shotsSeenBy(rules: RulesConfig, defender: PlayerState): Array<Shot & { sunkCells?: Cell[] }> {
+  return shotsAt(rules, defender).map(shooterView);
 }
