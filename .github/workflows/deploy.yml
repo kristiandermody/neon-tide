@@ -36,7 +36,14 @@ jobs:
       - run: npx wrangler deploy --env staging
       - name: Smoke test staging
         run: npm run smoke -- "$STAGING_URL"
-      - run: npx playwright install --with-deps chromium webkit
+      # Split so a hang shows whether apt or the browser download stalled; time-boxed so a hang
+      # fails fast instead of holding the deploy queue (a run on 2026-10-23 hung here 10+ minutes).
+      - name: Install Playwright OS dependencies
+        run: npx playwright install-deps chromium webkit
+        timeout-minutes: 5
+      - name: Install Playwright browsers
+        run: npx playwright install chromium webkit
+        timeout-minutes: 5
       - name: E2E against staging
         run: npm run e2e
         env:
