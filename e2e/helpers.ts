@@ -14,7 +14,13 @@ export async function placeRandomAndReady(page: Page): Promise<void> {
 export async function fireOnce(page: Page): Promise<void> {
   await targetCells(page).first().click();
   await page.getByRole("button", { name: /^Fire/ }).click();
-  await page.waitForFunction(() => !document.querySelector(".nt-banner--you") || document.querySelector("dialog[open]"));
+  // Poll on a timer (rAF stalls on background pages) and tolerate a lost shot: playToEnd re-fires if it is still this page's turn.
+  await page
+    .waitForFunction(() => !document.querySelector(".nt-banner--you") || document.querySelector("dialog[open]"), undefined, {
+      polling: 100,
+      timeout: 15_000,
+    })
+    .catch(() => undefined);
 }
 
 const isOver = async (page: Page) => (await page.locator("dialog[open]").count()) > 0;
