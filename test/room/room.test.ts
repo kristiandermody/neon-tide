@@ -109,10 +109,12 @@ test("the opponent's ship positions never appear in any message to a client", ()
         assert.equal(JSON.stringify(msg.yourFleet), ownFleet, "only your own fleet is sent");
         for (const shot of msg.yourShots) {
           assert.ok(hitByMe.has(shot.cell));
+          if (shot.result === "hit") assert.equal(shot.ship, undefined, "a plain hit does not name the enemy ship");
           for (const c of shot.sunkCells ?? []) assert.ok(hitByMe.has(c), "a wreck only lists cells already hit");
         }
       }
       if (msg.type === "result" && msg.by === "you") {
+        if (msg.result === "hit") assert.equal(msg.ship, undefined, "a plain hit does not name the enemy ship");
         for (const c of msg.sunkCells ?? []) assert.ok(hitByMe.has(c));
       }
       // No message carries a placement other than your own.

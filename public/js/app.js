@@ -158,8 +158,9 @@ function hitsByShip(shots) {
   return hits;
 }
 
+// Hits on the enemy fleet do not say which ship was hit, so only your own fleet shows per-ship damage.
 function fleetTracker(title, shots, sunk, compact = false) {
-  const hits = hitsByShip(shots);
+  const hits = shots ? hitsByShip(shots) : new Map();
   return h(
     `div.nt-fleet${compact ? ".nt-fleet--compact" : ""}`,
     {},
@@ -172,7 +173,7 @@ function fleetTracker(title, shots, sunk, compact = false) {
         const hitCount = isSunk ? s.length : hits.get(s.id) ?? 0;
         return h(
           `li.nt-fleet__ship${isSunk ? ".is-sunk" : ""}`,
-          { "aria-label": `${s.name}: ${isSunk ? "sunk" : `${hitCount} of ${s.length} hit`}` },
+          { "aria-label": `${s.name}: ${isSunk ? "sunk" : shots ? `${hitCount} of ${s.length} hit` : "afloat"}` },
           h("span.nt-fleet__name", {}, s.name),
           h("span.nt-fleet__pips", { "aria-hidden": "true" }, Array.from({ length: s.length }, (_, i) => h(`span.nt-pip${i < hitCount ? ".nt-pip--hit" : ""}`))),
         );
@@ -312,7 +313,7 @@ class GameScreen {
     } else if (r.result === "hit") {
       play("hit");
       board?.shake();
-      toast(mine ? "Hit" : `${this.opponentName} hit`, mine ? `${name} at ${cellLabel(r.cell)}` : `Your ${name}`, "hit");
+      toast(mine ? "Hit" : `${this.opponentName} hit`, mine ? cellLabel(r.cell) : `Your ${name}`, "hit");
     } else {
       play("sunk");
       board?.shake();
@@ -607,7 +608,7 @@ class GameScreen {
     }
     if (this.online === false) this.bannerHint.textContent = "Reconnecting...";
 
-    this.enemyFleet.replaceChildren(fleetTracker("Enemy fleet", vm.yourShots, vm.opponentSunk, true));
+    this.enemyFleet.replaceChildren(fleetTracker("Enemy fleet", null, vm.opponentSunk, true));
     this.ownFleet.replaceChildren(fleetTracker("Your fleet", vm.opponentShots, vm.yourSunk, true));
 
     this.fireMeta.textContent = this.target === null ? "" : cellLabel(this.target);
