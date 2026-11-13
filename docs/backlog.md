@@ -9,7 +9,38 @@ Add one line each: date, what happened, device and browser, link or game id if a
 
 | Date | Report | Device | Status |
 |---|---|---|---|
-| — | (none reported yet; owner's real-iPhone test pending) | — | — |
+| 2026-11-13 | Owner's phone-test results: to be added after the next deployment (B1 and B2 were not specifically tested) | — | Pending |
+| 2026-11-13 | B1 (High): turn freezes after a shot is lost on a dead socket; Fire stays disabled until reload. First reported 2026-10-12 | iOS after lock screen (by code reading, not reproduced on a device) | Open; PR `fix/lost-shot-freeze` |
+| 2026-11-13 | S1 (Medium): no limits on WebSocket connects, sockets per game or message rate | Worker (code reading) | Open; PR `fix/ws-abuse-limits` |
+| 2026-11-13 | B2 (Medium): guest seat is claimed on page load with no tap and locked to that browser's storage | Any browser (code reading, not reproduced) | Held for owner decision D3 |
+| 2026-11-13 | B3 (Medium): wake lock can be acquired after release and never let go. First reported 2026-10-12 | Browsers with Screen Wake Lock (code reading) | Open; PR `fix/wakelock-race` |
+| 2026-11-13 | G1 (Medium): no end-of-game reveal or board review; game-over dialog cannot be dismissed | Any | v2 proposal (needs a spec change) |
+| 2026-11-13 | G2 (Medium): no way out of an abandoned game (forfeit, resign, turn timer, claim-win) | Any | v2 proposal |
+| 2026-11-13 | P2 (Medium): staging E2E gate that blocks production looks flaky; unmerged patch on `origin/copilot/fix-failing-github-actions-job` | CI | Held for owner OK (row 10) |
+| 2026-11-13 | L2 (Low): sunk reveal draws ship boundaries when ships touch (reproduced against the engine) | Any | Owner decision D2: keep for now; v2 proposal |
+| 2026-11-13 | L3 (Low): frozen spec section 3 still says "hit (with ship name)"; decision 2026-10-22 overrides it | Docs | Held for owner decision D4 |
+| 2026-11-13 | L4 (Low): no browser test guards the hit-identity fix | E2E | Open; PR `test/hit-identity-guard` |
+| 2026-11-13 | S2 (Low): per-IP create limit bypassable over IPv6. First reported 2026-10-12 | Worker | Open; PR `fix/api-input-hardening` |
+| 2026-11-13 | S3 (Low): `POST /api/games` with body `null` returns 500. First reported 2026-10-12 | Worker | Open; PR `fix/api-input-hardening` |
+| 2026-11-13 | S4 (Low): no security headers (CSP, nosniff, referrer, frame rules) | Static assets | Open; PR `chore/security-headers` |
+| 2026-11-13 | S5 (Low): game creation accepts cross-site requests | Worker | Open; PR `fix/api-input-hardening` |
+| 2026-11-13 | S6 (Low): finished games and per-IP limiter objects are never cleaned up | Durable Objects | v2 proposal |
+| 2026-11-13 | S7 (Low): Actions referenced by tag, not commit SHA, in jobs holding the Cloudflare token | CI | Held for owner OK (row 10) |
+| 2026-11-13 | B4 (Low): computer's opening shot plays on the placement screen and briefly re-enables Ready | Any, vs computer | Open; PR `fix/client-small` |
+| 2026-11-13 | B5 (Low): a replaced socket can still deliver messages, so a result can be applied twice | Any | Open; PR `fix/lost-shot-freeze` |
+| 2026-11-13 | B6 (Low): a mistyped game link shows "Connecting" forever instead of "No game here" | Any | Open; PR `fix/client-small` |
+| 2026-11-13 | B7 (Low): an unfinished fleet layout is lost on reload or iOS tab eviction | iOS | v2 proposal (new behaviour) |
+| 2026-11-13 | B8 (Low): client fleet copy can drift from engine rules unnoticed. First reported 2026-10-12 | Code | Open; PR `fix/client-small` |
+| 2026-11-13 | G3 (Low): no rematch. G4 (Low): no in-app rules or help | Any | Out of scope by spec; v2 proposal |
+| 2026-11-13 | P3 (Low): pull requests run only typecheck and unit tests; E2E runs after merge | CI | By decision 2026-10-10; held for owner OK (row 10) |
+| 2026-11-13 | L5 (Info): sunk list is ordered by the opponent's placement order | Server | Open; PR `test/hit-identity-guard` |
+| 2026-11-13 | B9 (Info): duplicate branch in `tapPlacement`, mute listeners accumulate, `is-firing` never cleared | Client | Open; PR `fix/client-small` |
+| 2026-11-13 | P5 (Info): acceptance criteria 8 and 9 (real iPhone install, previews, two-phone game) still unticked | Owner | Owner to-do (see the 2026-10-10 handoff) |
+
+Findings above come from the 2026-11-13 review (full report not committed; owner's choice) and the
+2026-10-12 review (`docs/triage/2026-10-12-code-review.md`). Only L2 and L5 have been reproduced so far.
+Each fix PR reproduces its bug first and updates this table. P1 (the stranded 2026-10-12 review) is closed
+by this change; P4 (stale local clone) is moot, the review's line numbers were re-checked after `git fetch`.
 
 ## Known issues and gaps in Phase 1
 
