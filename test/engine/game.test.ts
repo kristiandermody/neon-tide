@@ -119,6 +119,22 @@ test("the shooter's view of a plain hit does not name the ship, but a sunk shot 
   assert.equal(seen[1].ship, "destroyer");
 });
 
+test("sunk ships are listed in fleet order, not placement order or sink order (L5)", () => {
+  const game = newGame();
+  assert.equal(placeFleet(R, game, 0, stacked()).ok, true);
+  // Seat 1 submits its placements in reverse: destroyer first, carrier last.
+  assert.equal(placeFleet(R, game, 1, stacked().reverse()).ok, true);
+  markReady(game, 0, () => 0);
+  markReady(game, 1, () => 0);
+  // Seat 0 sinks the destroyer (row 4) first, then the cruiser (row 2).
+  const volleys: Array<[number, number]> = [[40, 99], [41, 98], [20, 97], [21, 96], [22, 95]];
+  for (const [mine, theirs] of volleys) {
+    assert.ok(fire(R, game, 0, mine).ok);
+    fire(R, game, 1, theirs);
+  }
+  assert.deepEqual(sunkShips(R, game.players[1]), ["cruiser", "destroyer"]);
+});
+
 test("sinking the whole fleet wins and ends the game", () => {
   const game = started();
   const targets = fleetCells();
