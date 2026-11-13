@@ -229,6 +229,12 @@ class GameScreen {
 
   connectionStatus(status) {
     this.online = status === "open";
+    // A new socket means any shot still unanswered was lost (a dead socket can swallow the frame), and the
+    // resumed state is the truth. Without this Fire stays disabled until a reload.
+    if (status === "open" && this.firing) {
+      this.firing = false;
+      this.enemyBoard?.cells[this.target]?.classList.remove("is-firing");
+    }
     if (this.kind === "battle") this.renderBattle();
   }
 
