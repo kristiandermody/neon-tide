@@ -7,6 +7,7 @@ import { FLEET, SIZE, cellLabel, fits, occupancy, randomLayout, shipCells, shipL
 import { Connection } from "./net.js";
 import { playerToken } from "./store.js";
 import { keepAwake } from "./wakelock.js";
+import { GAME_ID_PATTERN } from "./ids.js";
 
 const app = document.getElementById("app");
 const toastRegion = document.getElementById("toasts");
@@ -48,9 +49,14 @@ function navigate(path) {
   route();
 }
 
+/** Lets the mute buttons under `root` unregister their listeners before `root`'s children are replaced. */
+function releaseMuteButtons(root) {
+  for (const el of root.querySelectorAll(".nt-mute")) el.dispatchEvent(new Event("nt:destroy"));
+}
+
 function mount(screen) {
   current?.destroy?.();
-  for (const el of app.querySelectorAll(".nt-mute")) el.dispatchEvent(new Event("nt:destroy"));
+  releaseMuteButtons(app);
   current = screen;
   app.replaceChildren(screen.el);
 }
@@ -189,6 +195,7 @@ class GameScreen {
     this.id = id;
     this.vm = null; // last state, updated locally by results while they animate
     this.queue = [];
+    this.held = []; // results that arrived before the battle screen was built (the computer's opening shot)
     this.busy = false;
     this.kind = null; // which sub-screen is built
     this.draft = { placements: [], selected: FLEET[0].id, orientation: Object.fromEntries(FLEET.map((s) => [s.id, "h"])) };
@@ -244,6 +251,7 @@ class GameScreen {
     if (fatal[msg.code]) {
       this.finish();
       this.kind = "message";
+      releaseMuteButtons(this.el);
       this.el.replaceChildren(messageScreen(fatal[msg.code], msg.message).el);
       return;
     }
@@ -258,8 +266,12 @@ class GameScreen {
       if (msg.type === "state") {
         this.vm = msg;
         this.render();
+        // The state already contains the held shot; only its toast, sound and animation are still due.
+        if (this.kind === "battle") while (this.held.length) await this.animate(this.held.shift());
       } else if (msg.type === "opponent_status") {
         this.opponentStatus(msg.status);
+      } else if (msg.type === "result" && this.vm && this.kind !== "battle") {
+        this.held.push(msg);
       } else if (msg.type === "result" && this.vm) {
         this.applyResult(msg);
         this.render();
@@ -289,6 +301,7 @@ class GameScreen {
       vm.yourShots.push(shot);
       if (r.result === "sunk" && !vm.opponentSunk.includes(r.ship)) vm.opponentSunk.push(r.ship);
       this.firing = false;
+      this.enemyBoard?.cells[this.target]?.classList.remove("is-firing");
       this.target = null;
     } else {
       vm.opponentShots.push(shot);
@@ -333,6 +346,7 @@ class GameScreen {
     if (vm.phase === "over" || vm.phase === "expired") this.finish();
     if (vm.phase === "expired") {
       this.kind = "message";
+      releaseMuteButtons(this.el);
       this.el.replaceChildren(messageScreen("Game expired", "This game sat idle for 24 hours and has ended.").el);
       return;
     }
@@ -346,6 +360,7 @@ class GameScreen {
   ensure(kind, build, update) {
     if (this.kind !== kind) {
       this.kind = kind;
+      releaseMuteButtons(this.el);
       this.el.replaceChildren(build());
     }
     update();
@@ -422,8 +437,7 @@ class GameScreen {
   tapPlacement(cell) {
     const { placements, selected, orientation } = this.draft;
     const owner = occupancy(placements).get(cell);
-    if (owner && owner !== selected) return this.select(owner);
-    if (owner && owner === selected) return this.select(owner);
+    if (owner) return this.select(owner);
     if (!selected) return;
     const candidate = { ship: selected, cell, orientation: orientation[selected] };
     this.tryPlace(candidate);
@@ -672,8 +686,10 @@ function stat(value, label) {
 // ---------- Router ----------
 
 function route() {
-  const match = location.pathname.match(/^\/g\/([0-9a-z]{16})$/);
-  if (match) mount(new GameScreen(match[1]));
+  const link = location.pathname.match(/^\/g\/([^/]+)$/);
+  const id = link?.[1].toLowerCase();
+  if (id && GAME_ID_PATTERN.test(id)) mount(new GameScreen(id));
+  else if (link) mount(messageScreen("No game here", "That link is not a game link. Check it and try again."));
   else if (location.pathname === "/") mount(homeScreen());
   else mount(messageScreen("Not found", "There is nothing at this address."));
 }

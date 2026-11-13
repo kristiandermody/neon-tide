@@ -18,6 +18,9 @@ export function onMuteChange(fn) {
   return () => listeners.delete(fn);
 }
 
+/** How many mute listeners are registered (for tests: it should equal the mute buttons on screen). */
+export const muteListenerCount = () => listeners.size;
+
 /** Browsers only start audio after a user gesture; call this from one. */
 export function unlockAudio() {
   if (!ctx) {
