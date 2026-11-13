@@ -41,6 +41,8 @@ export class Connection {
       this.pingTimer = setInterval(() => this.ws === ws && ws.readyState === WebSocket.OPEN && ws.send(PING), PING_EVERY_MS);
     });
     ws.addEventListener("message", (event) => {
+      // A socket that has been replaced may still deliver late frames; the new socket's state is the truth.
+      if (this.ws !== ws) return;
       this.lastMessageAt = Date.now();
       let msg;
       try {
