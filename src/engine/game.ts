@@ -117,16 +117,20 @@ export function fire(rules: RulesConfig, game: GameState, seat: Seat, cell: Cell
   return { ok: true, value: { ...shot, by: seat, winner: game.winner } };
 }
 
-/** Ship ids of a player's fleet that are fully hit. */
+/**
+ * Ship ids of a player's fleet that are fully hit, always in `rules.fleet` order.
+ * Iterating the placements instead would leak the order the defender placed their ships in.
+ */
 export function sunkShips(rules: RulesConfig, player: PlayerState): string[] {
   if (!player.fleet) return [];
   const shot = new Set(player.shotsReceived);
-  return player.fleet
-    .filter((p) => {
-      const spec = rules.fleet.find((s) => s.id === p.ship)!;
-      return shipCells(rules, p.cell, p.orientation, spec.length)!.every((c) => shot.has(c));
+  const placed = new Map(player.fleet.map((p) => [p.ship, p]));
+  return rules.fleet
+    .filter((spec) => {
+      const p = placed.get(spec.id);
+      return p !== undefined && shipCells(rules, p.cell, p.orientation, spec.length)!.every((c) => shot.has(c));
     })
-    .map((p) => p.ship);
+    .map((spec) => spec.id);
 }
 
 function isFleetSunk(rules: RulesConfig, player: PlayerState): boolean {
