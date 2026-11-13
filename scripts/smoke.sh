@@ -18,6 +18,11 @@ check "manifest type"    "application/manifest+json" "$(curl -s -o /dev/null -w 
 check "game link (SPA)"  200 "$(code "$BASE/g/0000000000000000")"
 check "api GET"          405 "$(code "$BASE/api/games")"
 check "api bad body"     400 "$(code -X POST -H 'content-type: application/json' -d '{"mode":"computer","token":"x"}' "$BASE/api/games")"
+check "api null body"    400 "$(code -X POST -H 'content-type: application/json' -d 'null' "$BASE/api/games")"
+check "api array body"   400 "$(code -X POST -H 'content-type: application/json' -d '[]' "$BASE/api/games")"
+check "api not json"     400 "$(code -X POST -H 'content-type: application/json' -d 'nope' "$BASE/api/games")"
+check "api wrong type"   415 "$(code -X POST -H 'content-type: text/plain' -d '{"mode":"computer","token":"00000000000000000000000000000000"}' "$BASE/api/games")"
+check "api no type"      415 "$(code -X POST -d '{"mode":"computer","token":"00000000000000000000000000000000"}' -H 'content-type:' "$BASE/api/games")"
 check "ws bad id"        404 "$(code "$BASE/ws/not-an-id")"
 ws_code=$(curl -s --http1.1 -o /dev/null -m 5 -w '%{http_code}' \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \

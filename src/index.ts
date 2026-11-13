@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { cryptoRng, other, type Seat } from "./engine/index.ts";
 import { GAME_ID_PATTERN, newGameId } from "./room/ids.ts";
+import { limitKey } from "./room/ip.ts";
 import { PING, PONG, TOKEN_PATTERN, parseClientMessage, type Mode, type ServerMessage } from "./room/protocol.ts";
 import { claimSeat, createRoom, handle, markBack, markGone, nextAlarm, stateFor, tick, upgrade, type RoomRecord } from "./room/room.ts";
 
@@ -169,18 +170,24 @@ function json(body: unknown, status = 200): Response {
 }
 
 async function createGame(request: Request, env: Env): Promise<Response> {
-  let body: { mode?: unknown; token?: unknown };
+  // The client always sends JSON. Refusing other content types keeps a plain cross-site form post from
+  // spending a visitor's create quota; a JSON post from another origin needs a preflight this Worker never answers.
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  if (contentType.split(";")[0].trim() !== "application/json") return json({ error: "unsupported_media_type" }, 415);
+  let parsed: unknown;
   try {
-    body = await request.json();
+    parsed = await request.json();
   } catch {
     return json({ error: "bad_request" }, 400);
   }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return json({ error: "bad_request" }, 400);
+  const body = parsed as { mode?: unknown; token?: unknown };
   const mode = body.mode;
   if ((mode !== "computer" && mode !== "friend") || typeof body.token !== "string" || !TOKEN_PATTERN.test(body.token)) {
     return json({ error: "bad_request" }, 400);
   }
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-  const limiter = env.CREATE_LIMITER.get(env.CREATE_LIMITER.idFromName(ip));
+  const limiter = env.CREATE_LIMITER.get(env.CREATE_LIMITER.idFromName(limitKey(ip)));
   if (!(await limiter.take(Date.now(), CREATE_LIMIT, CREATE_WINDOW_MS))) return json({ error: "rate_limited" }, 429);
 
   const id = newGameId();
