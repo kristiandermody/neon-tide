@@ -24,4 +24,14 @@ ws_code=$(curl -s --http1.1 -o /dev/null -m 5 -w '%{http_code}' \
   -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' "$BASE/ws/0000000000000000" || true)
 check "ws upgrade"       101 "$ws_code"
 
+# Security headers (public/_headers) on a page, the SPA fallback and a script.
+hdr() { curl -sI "$2" | tr -d '\r' | awk -F': ' -v h="$1" 'tolower($1)==h { print $2 }'; }
+for path in "/" "/g/0000000000000000" "/js/app.js"; do
+  check "nosniff $path"   "nosniff"     "$(hdr x-content-type-options "$BASE$path")"
+  check "referrer $path"  "no-referrer" "$(hdr referrer-policy "$BASE$path")"
+  check "frame $path"     "DENY"        "$(hdr x-frame-options "$BASE$path")"
+  check "csp $path"       1             "$(hdr content-security-policy "$BASE$path" | grep -c "^default-src 'none'; script-src 'self'; ")"
+done
+check "permissions /"     1             "$(hdr permissions-policy "$BASE/" | grep -c 'camera=()')"
+
 exit $fail
