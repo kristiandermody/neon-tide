@@ -1,0 +1,14 @@
+# Security headers for static assets (pages, scripts, styles, icons). Cloudflare does not apply this file
+# to responses the Worker itself generates (/api/*, /ws/*); those are JSON or WebSocket upgrades.
+# Docs: https://developers.cloudflare.com/workers/static-assets/headers/
+#
+# The CSP allows only this site's own files, plus one inline <style> block in index.html identified by its
+# hash. If you edit that block, test/client/headers.test.ts fails until the hash below is updated.
+# connect-src lists wss: as well as 'self' because the game opens a same-origin WebSocket and older WebKit
+# builds did not always count 'self' as covering it.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'sha256-DixXmTzP0sXKSGfLJALdjmErQYdXNTq45n/44RUp+QM='; img-src 'self' data:; font-src 'self'; connect-src 'self' wss:; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
