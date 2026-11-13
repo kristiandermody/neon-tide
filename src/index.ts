@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { cryptoRng, other, type Seat } from "./engine/index.ts";
 import { GAME_ID_PATTERN, newGameId } from "./room/ids.ts";
+import { CLOSE_RATE_LIMITED, MAX_SOCKETS_PER_GAME, UPGRADE_LIMIT, UPGRADE_WINDOW_MS, spendMessage, type Budget } from "./room/limits.ts";
 import { PING, PONG, TOKEN_PATTERN, parseClientMessage, type Mode, type ServerMessage } from "./room/protocol.ts";
 import { claimSeat, createRoom, handle, markBack, markGone, nextAlarm, stateFor, tick, upgrade, type RoomRecord } from "./room/room.ts";
 
@@ -17,6 +18,8 @@ const ROOM_KEY = "room";
 
 interface Attachment {
   seat: Seat | null;
+  /** Message budget for this socket (see room/limits.ts). */
+  budget?: Budget;
 }
 
 /**
@@ -58,6 +61,7 @@ export class GameRoom extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") return new Response("Expected WebSocket", { status: 426 });
+    if (this.ctx.getWebSockets().length >= MAX_SOCKETS_PER_GAME) return new Response("Too many connections to this game", { status: 429 });
     const pair = new WebSocketPair();
     const server = pair[1];
     this.ctx.acceptWebSocket(server);
@@ -70,16 +74,27 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+    // Every frame that wakes the object counts, valid or not, so a flood of junk is cut off too.
+    const attachment = (ws.deserializeAttachment() as Attachment | null) ?? { seat: null };
+    const spent = spendMessage(attachment.budget, Date.now());
+    attachment.budget = spent.budget;
+    ws.serializeAttachment(attachment satisfies Attachment);
+    if (!spent.allowed) {
+      send(ws, { type: "error", code: "rate_limited", message: "Too many messages. Slow down." });
+      ws.close(CLOSE_RATE_LIMITED, "rate limited");
+      return;
+    }
+
     const room = this.load();
     const msg = parseClientMessage(raw);
     if (!room) return;
     if (!msg) return send(ws, { type: "error", code: "bad_message", message: "Message not understood." });
 
-    const { seat } = ws.deserializeAttachment() as Attachment;
+    const { seat } = attachment;
     if (msg.type === "join" || msg.type === "resume") {
       const claim = claimSeat(room, msg);
       if ("type" in claim) return send(ws, claim);
-      ws.serializeAttachment({ seat: claim.seat } satisfies Attachment);
+      ws.serializeAttachment({ seat: claim.seat, budget: attachment.budget } satisfies Attachment);
       const wasAway = room.expired ? false : markBack(room, claim.seat, Date.now());
       await this.save(room);
       if (claim.joined) this.sendTo(other(claim.seat), { type: "opponent_status", status: "joined" });
@@ -198,6 +213,11 @@ export default {
     const ws = pathname.match(/^\/ws\/([^/]+)$/);
     if (ws) {
       if (!GAME_ID_PATTERN.test(ws[1])) return new Response("Not found", { status: 404 });
+      // Refuse non-upgrades and over-limit visitors here, before a game object is woken or created.
+      if (request.headers.get("Upgrade") !== "websocket") return new Response("Expected WebSocket", { status: 426 });
+      const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+      const limiter = env.CREATE_LIMITER.get(env.CREATE_LIMITER.idFromName(`ws:${ip}`));
+      if (!(await limiter.take(Date.now(), UPGRADE_LIMIT, UPGRADE_WINDOW_MS))) return new Response("Too many connections", { status: 429 });
       return env.GAME_ROOM.get(env.GAME_ROOM.idFromName(ws[1])).fetch(request);
     }
     return new Response("Not found", { status: 404 });
