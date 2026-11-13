@@ -207,6 +207,27 @@ test("the computer seat is never marked away", () => {
   assert.equal(room.goneAt[1], null);
 });
 
+test("re-sending the stored fleet is a no-op: nothing to save or broadcast, and it is not activity", () => {
+  const room = createRoom("x", "friend", ALICE, 0, seededRng(9));
+  const first = handle(room, 0, { type: "place", fleet: stacked() }, 1000, seededRng(9));
+  assert.equal(first.changed, true);
+  const again = handle(room, 0, { type: "place", fleet: stacked().reverse() }, 5000, seededRng(9));
+  assert.deepEqual(again, { out: [], changed: false }, "same placements in another order are the same fleet");
+  assert.equal(room.updatedAt, 1000, "a repeat does not push the expiry back");
+
+  const moved = stacked();
+  moved[4] = { ship: "destroyer", cell: 95, orientation: "h" };
+  const changed = handle(room, 0, { type: "place", fleet: moved }, 6000, seededRng(9));
+  assert.equal(changed.changed, true);
+  assert.equal(room.updatedAt, 6000);
+
+  // After Ready the same fleet is refused as before, not silently accepted.
+  handle(room, 0, { type: "ready" }, 7000, seededRng(9));
+  const late = handle(room, 0, { type: "place", fleet: moved }, 8000, seededRng(9));
+  assert.equal(late.changed, false);
+  assert.equal((late.out[0].msg as { code: string }).code, "already_ready");
+});
+
 test("unfinished games expire after 24h without activity; finished games never expire", () => {
   const room = createRoom("x", "friend", ALICE, 0, seededRng(7));
   assert.equal(nextAlarm(room), EXPIRY_MS);

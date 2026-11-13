@@ -13,6 +13,7 @@ import {
   shotsSeenBy,
   sunkShips,
   type GameState,
+  type Placement,
   type Rng,
   type RulesConfig,
   type Seat,
@@ -151,6 +152,13 @@ function computerTurn(room: RoomRecord, rng: Rng): Outgoing[] {
   return announce(room, shot.value);
 }
 
+function sameFleet(stored: Placement[] | null, sent: Placement[]): boolean {
+  if (!stored || stored.length !== sent.length) return false;
+  const key = (p: Placement) => `${p.ship}:${p.cell}:${p.orientation}`;
+  const have = new Set(stored.map(key));
+  return sent.every((p) => have.has(key(p)));
+}
+
 /** Applies one game message from a seated player. */
 export function handle(room: RoomRecord, seat: Seat, msg: ClientMessage, now: number, rng: Rng): Handled {
   if (room.expired) return { out: [{ to: seat, msg: error("expired", "This game expired.") }], changed: false };
@@ -159,6 +167,10 @@ export function handle(room: RoomRecord, seat: Seat, msg: ClientMessage, now: nu
 
   switch (msg.type) {
     case "place": {
+      // Re-sending the stored fleet changes nothing: skip the save and the broadcast (and do not count it as activity).
+      if (sameFleet(room.game.players[seat].fleet, msg.fleet) && room.game.phase === "placing" && !room.game.players[seat].ready) {
+        return { out: [], changed: false };
+      }
       const r = placeFleet(RULES, room.game, seat, msg.fleet);
       if (!r.ok) failure = r.error;
       break;
